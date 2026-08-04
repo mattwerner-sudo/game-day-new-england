@@ -1,4 +1,4 @@
-# PROJECT: [Working Name TBD] — New England College Sports & Campus Events Aggregator
+# PROJECT: Game Day New England — New England College Sports & Campus Events Aggregator
 
 > This file is read automatically by Claude Code at the start of every session in this repo.
 > Keep it current — when a real decision is made in chat or in code, update this file so the
@@ -296,7 +296,8 @@ Vercel, migration off local PGlite to managed Postgres.
 
 ## 8. Open questions to resolve early (don't guess silently — surface these)
 
-- Final product/company name and domain
+- ~~Final product/company name~~ — resolved 2026-08-04: **Game Day New England**. Repo:
+  https://github.com/mattwerner-sudo/game-day-new-england. Domain still open.
 - ~~Drizzle vs Prisma for the ORM~~ — resolved, see Section 9.
 - Whether NESCAC has a conference-level feed worth ingesting directly, or whether it's 11
   separate school feeds
