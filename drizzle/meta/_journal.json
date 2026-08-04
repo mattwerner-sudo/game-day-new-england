@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1785866861312,
+      "tag": "0000_ambiguous_the_renegades",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1785869536270,
+      "tag": "0001_add_venue_city_state",
+      "breakpoints": true
+    }
+  ]
+}
