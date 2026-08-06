@@ -37,6 +37,26 @@ export function deriveSeason(sportName: string, date: Date): "fall" | "winter" |
   return "spring"; // Mar-Jul
 }
 
+const STALE_FEED_THRESHOLD_DAYS = 300;
+
+/**
+ * Some SIDEARM sites still link to defunct/renamed program pages in their nav alongside
+ * real varsity sports - discoverSportSlugs() has no way to tell "Blue & White Women's
+ * Soccer" apart from "Women's Soccer" just from the URL pattern, and both show up as real
+ * /sports/<slug>/schedule links. Confirmed via a real example: Assumption's "Blue & White
+ * Women's Soccer" feed (sport_id=44) has every event dated 2024 with nothing since, while
+ * the real Women's Soccer feed (sport_id=18) at the same school runs into 2027. A feed with
+ * nothing newer than this threshold is treated as inactive and skipped entirely, rather than
+ * polluting the normalized sports list with a dead program name. This is evaluated fresh
+ * against "now" on every ingest run, not a permanent blocklist - if a school later
+ * republishes dates for a sport, the next run picks it back up automatically.
+ */
+export function isFeedStale(mostRecentStart: Date | null, now: Date): boolean {
+  if (!mostRecentStart) return true; // no games in the feed at all
+  const daysSinceLatest = (now.getTime() - mostRecentStart.getTime()) / (1000 * 60 * 60 * 24);
+  return daysSinceLatest > STALE_FEED_THRESHOLD_DAYS;
+}
+
 // Different SIDEARM sites (and even different pages on the same site) format the same
 // state inconsistently - "MA", "Mass.", "Massachusetts" all show up for one school.
 // Normalize everything to a standard 2-letter USPS code so State is actually filterable.
@@ -116,6 +136,29 @@ function cleanStateToken(raw: string): string {
 }
 
 /**
+ * Meet-based sports (track & field, cross country, swimming invitationals) commonly use
+ * a third real format for away/neutral-site meets: "Venue Name (City, ST[.])", e.g.
+ * "Sherie and Don (1961) Morrison Track (Cambridge, Mass.)" - confirmed via Williams
+ * College's real track & field feed. The naive comma-split in parseLocation() mishandles
+ * this badly: splitting "Sherie and Don (1961) Morrison Track (Cambridge, Mass.)" on the
+ * first comma produces city = venueName = the entire garbled "...Track (Cambridge" string
+ * (state still comes out right by luck, since cleanStateToken independently strips at the
+ * next "(" - but city/venue don't). Matched here by requiring a comma *inside* the
+ * trailing parenthetical group, which disambiguates it from the "City, ST (Venue)" format
+ * (no comma inside those parens) already handled by the comma-split branches below.
+ */
+function parseVenueWithParentheticalCityState(location: string): ParsedLocation | null {
+  const match = location.match(/^(.+?)\s*\(([^,()]+),\s*([^()]+?)\)/);
+  if (!match) return null;
+  const [, venue, city, stateRaw] = match;
+  return {
+    city: city.trim(),
+    state: normalizeState(cleanStateToken(stateRaw)),
+    venueName: venue.trim(),
+  };
+}
+
+/**
  * SIDEARM LOCATION format varies by site/sport - two real patterns show up in this
  * data: "City, ST, Venue Name" (comma-comma) and "City, ST / Venue Name" (comma then
  * a slash inside the second segment, no second comma). Often just "City, ST" (no
@@ -124,6 +167,10 @@ function cleanStateToken(raw: string): string {
  */
 export function parseLocation(location: string | null): ParsedLocation {
   if (!location) return { city: null, state: null, venueName: "TBD" };
+
+  const parenParsed = parseVenueWithParentheticalCityState(location);
+  if (parenParsed) return parenParsed;
+
   const parts = location
     .split(",")
     .map((p) => p.trim())
@@ -155,6 +202,45 @@ export function parseLocation(location: string | null): ParsedLocation {
     };
   }
   return { city: null, state: null, venueName: parts[0] ?? "TBD" };
+}
+
+/**
+ * SIDEARM DESCRIPTION packs several "Label: value" lines into one field, e.g.
+ * "...\nTV: ESPN+\nStreaming Video: https://...\nTickets: https://uvmathletics.evenue.net/list/MHK\n".
+ * The Tickets line is only present on the home school's own feed entry for a game
+ * (SIDEARM doesn't surface the opponent's ticket link on an away entry), so callers
+ * should only trust this for the feed that's actually hosting the game.
+ */
+export function parseTicketUrl(description: string | null): string | null {
+  if (!description) return null;
+  const match = description.match(/^Tickets:\s*(\S+)/m);
+  return match ? match[1] : null;
+}
+
+export interface ParsedStreamingInfo {
+  tvNetwork: string | null;
+  streamingVideoUrl: string | null;
+  radioNetwork: string | null;
+  streamingAudioUrl: string | null;
+}
+
+/**
+ * Same DESCRIPTION field as parseTicketUrl(), different lines. Unlike Tickets (only home
+ * schools sell tickets to their own games), both sides of a matchup can legitimately have
+ * their own real TV/streaming info for the same game, but callers should still only trust
+ * this per the same isHome gating as tickets/sourceUrl, for deterministic upserts - see
+ * CLAUDE.md.
+ */
+export function parseStreamingInfo(description: string | null): ParsedStreamingInfo {
+  if (!description) {
+    return { tvNetwork: null, streamingVideoUrl: null, radioNetwork: null, streamingAudioUrl: null };
+  }
+  return {
+    tvNetwork: description.match(/^TV:\s*(.+)$/m)?.[1]?.trim() ?? null,
+    streamingVideoUrl: description.match(/^Streaming Video:\s*(\S+)/m)?.[1] ?? null,
+    radioNetwork: description.match(/^Radio:\s*(.+)$/m)?.[1]?.trim() ?? null,
+    streamingAudioUrl: description.match(/^Streaming Audio:\s*(\S+)/m)?.[1] ?? null,
+  };
 }
 
 export interface ParsedMatchup {

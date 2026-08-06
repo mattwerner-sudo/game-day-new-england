@@ -5,6 +5,27 @@ export interface SidearmSportMeta {
   title: string; // e.g. "Women's Soccer"
   genderCode: string; // "m" | "f" | other
   slug: string; // URL slug, e.g. "womens-soccer"
+  // Per-game ticket URLs, keyed by the same numeric game_id the ICS feed's own URL field
+  // uses. Schools on the Paciolan/evenue ticket vendor get a real per-game deep link
+  // rendered server-side on this same schedule page as `<a class="paciolan_link" ...
+  // href="…tickets.ashx/go?game_id=N&…">`. This is a *better* source than the ICS
+  // DESCRIPTION field's "Tickets:" line when both exist (per-game vs. a generic season
+  // list page - see CLAUDE.md) and also catches real ticketed games the DESCRIPTION line
+  // omits entirely. Empty for schools not on this vendor/widget - not every school will
+  // have entries here, and that's expected, not a bug.
+  ticketUrlsByGameId: Map<string, string>;
+}
+
+/** Extract Paciolan/evenue per-game ticket links from a SIDEARM schedule page's HTML. */
+function extractPaciolanTicketLinks(html: string): Map<string, string> {
+  const map = new Map<string, string>();
+  const matches = html.matchAll(/<a class="paciolan_link"[^>]*href="([^"]+)"/g);
+  for (const m of matches) {
+    const href = m[1].replace(/&amp;/g, "&").replace(/^http:/, "https:");
+    const gameId = href.match(/game_id=(\d+)/)?.[1];
+    if (gameId) map.set(gameId, href);
+  }
+  return map;
 }
 
 /** Fetch a SIDEARM athletics homepage and extract every /sports/<slug>/schedule link. */
@@ -39,5 +60,6 @@ export async function fetchSportMeta(
     title: parsed.title,
     genderCode: parsed.gender ?? "",
     slug,
+    ticketUrlsByGameId: extractPaciolanTicketLinks(html),
   };
 }

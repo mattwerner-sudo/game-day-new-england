@@ -137,9 +137,17 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
         <header className="mb-8">
-          <p className="text-sm font-medium text-orange-600 dark:text-orange-400">
-            New England College Sports
-          </p>
+          <div className="flex items-center justify-between">
+            <p className="text-sm font-medium text-orange-600 dark:text-orange-400">
+              New England College Sports
+            </p>
+            <Link
+              href="/follow"
+              className="text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
+            >
+              Follow your school →
+            </Link>
+          </div>
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
             {title}
           </h1>
@@ -150,7 +158,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
               day: "numeric",
             })}{" "}
             · {events.length} game{events.length === 1 ? "" : "s"}
-            {hasFilters ? " matching your filters" : " across the validation batch"}
+            {hasFilters ? " matching your filters" : " across the 25-school batch"}
           </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -323,7 +331,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
           <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
             <p className="text-zinc-600 dark:text-zinc-400">
               No games {range === "today" ? "today" : range === "week" ? "in the next 7 days" : range === "month" ? "that month" : "this weekend"}
-              {hasFilters ? " match your filters" : ""} in the current 10-school validation batch.
+              {hasFilters ? " match your filters" : ""} in the current 25-school batch.
               Most varsity seasons run fall (Aug–Nov), winter (Nov–Mar), and spring (Mar–May) —
               check back closer to the season, widen ingestion coverage, or adjust your filters.
             </p>
@@ -358,6 +366,53 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
                         {formatLocation(event)}
                         {event.division ? ` · ${event.division}` : ""}
                       </p>
+                      {(event.ticketUrl ||
+                        event.sourceUrl ||
+                        event.streamingVideoUrl ||
+                        event.streamingAudioUrl) && (
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {event.ticketUrl && (
+                            <a
+                              href={event.ticketUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700"
+                            >
+                              Buy Tickets
+                            </a>
+                          )}
+                          {event.streamingVideoUrl && (
+                            <a
+                              href={event.streamingVideoUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+                            >
+                              Watch{event.tvNetwork ? ` on ${event.tvNetwork}` : ""}
+                            </a>
+                          )}
+                          {event.streamingAudioUrl && (
+                            <a
+                              href={event.streamingAudioUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-lg border border-indigo-300 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950"
+                            >
+                              Listen{event.radioNetwork ? ` on ${event.radioNetwork}` : ""}
+                            </a>
+                          )}
+                          {event.sourceUrl && (
+                            <a
+                              href={event.sourceUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                            >
+                              Game Info
+                            </a>
+                          )}
+                        </div>
+                      )}
                     </li>
                   ))}
                 </ul>

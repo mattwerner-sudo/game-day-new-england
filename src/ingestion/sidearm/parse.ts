@@ -6,6 +6,8 @@ export interface RawIcsGame {
   start: Date;
   end: Date | null;
   location: string | null;
+  description: string | null;
+  url: string | null;
 }
 
 function isVEvent(entry: unknown): entry is VEvent {
@@ -27,6 +29,9 @@ export function parseIcsEvents(icsText: string): RawIcsGame[] {
       start: new Date(entry.start as unknown as string | number | Date),
       end: entry.end ? new Date(entry.end as unknown as string | number | Date) : null,
       location: entry.location ? String(entry.location) : null,
+      description: entry.description ? String(entry.description) : null,
+      // SIDEARM HTML-entity-escapes the "&" in game_id=...&sport_id=... query strings.
+      url: entry.url ? String(entry.url).replace(/&amp;/g, "&") : null,
     });
   }
 

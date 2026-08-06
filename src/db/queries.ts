@@ -89,6 +89,12 @@ export interface WeekendEvent {
   venueName: string | null;
   venueCity: string | null;
   venueState: string | null;
+  ticketUrl: string | null;
+  sourceUrl: string | null;
+  tvNetwork: string | null;
+  streamingVideoUrl: string | null;
+  radioNetwork: string | null;
+  streamingAudioUrl: string | null;
 }
 
 export interface EventFilters {
@@ -142,6 +148,12 @@ export async function getFilteredEvents(
       venueName: venues.name,
       venueCity: venues.city,
       venueState: venues.state,
+      ticketUrl: events.ticketUrl,
+      sourceUrl: events.sourceUrl,
+      tvNetwork: events.tvNetwork,
+      streamingVideoUrl: events.streamingVideoUrl,
+      radioNetwork: events.radioNetwork,
+      streamingAudioUrl: events.streamingAudioUrl,
     })
     .from(events)
     .leftJoin(homeTeams, eq(events.homeTeamId, homeTeams.id))
@@ -150,6 +162,63 @@ export async function getFilteredEvents(
     .leftJoin(awaySchools, eq(awayTeams.schoolId, awaySchools.id))
     .leftJoin(venues, eq(events.venueId, venues.id))
     .where(and(...conditions))
+    .orderBy(asc(events.startDatetime));
+
+  return rows;
+}
+
+/**
+ * Upcoming events (next 7 days) for the fan-follow alert digest - one game where either
+ * side's school is in schoolIds. Uses the same homeSchools/awaySchools alias + or() pattern
+ * as getFilteredEvents so a fan following two schools that play each other only sees the
+ * game once. Excludes cancelled games (an unsolicited email about a cancelled game is worse
+ * than a webpage silently listing one) and, like the rest of the product, anything outside
+ * New England. Doesn't surface special_event rows once those exist later - this only checks
+ * home/away team ids.
+ */
+export async function getUpcomingEventsForSchoolIds(
+  schoolIds: string[],
+  now?: Date
+): Promise<WeekendEvent[]> {
+  if (schoolIds.length === 0) return [];
+  const { start, end } = getRangeWindow("week", now);
+
+  const rows = await db
+    .select({
+      id: events.id,
+      sport: events.sport,
+      gender: events.gender,
+      season: events.season,
+      division: events.division,
+      startDatetime: events.startDatetime,
+      status: events.status,
+      homeSchoolName: homeSchools.name,
+      awaySchoolName: awaySchools.name,
+      venueName: venues.name,
+      venueCity: venues.city,
+      venueState: venues.state,
+      ticketUrl: events.ticketUrl,
+      sourceUrl: events.sourceUrl,
+      tvNetwork: events.tvNetwork,
+      streamingVideoUrl: events.streamingVideoUrl,
+      radioNetwork: events.radioNetwork,
+      streamingAudioUrl: events.streamingAudioUrl,
+    })
+    .from(events)
+    .leftJoin(homeTeams, eq(events.homeTeamId, homeTeams.id))
+    .leftJoin(homeSchools, eq(homeTeams.schoolId, homeSchools.id))
+    .leftJoin(awayTeams, eq(events.awayTeamId, awayTeams.id))
+    .leftJoin(awaySchools, eq(awayTeams.schoolId, awaySchools.id))
+    .leftJoin(venues, eq(events.venueId, venues.id))
+    .where(
+      and(
+        gte(events.startDatetime, start),
+        lt(events.startDatetime, end),
+        inArray(venues.state, NE_STATES),
+        or(inArray(homeSchools.id, schoolIds), inArray(awaySchools.id, schoolIds)),
+        or(eq(events.status, "scheduled"), eq(events.status, "postponed"), eq(events.status, "final"))
+      )
+    )
     .orderBy(asc(events.startDatetime));
 
   return rows;

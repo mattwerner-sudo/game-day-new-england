@@ -78,6 +78,12 @@ export interface EventUpsertInput {
   source: string;
   sourceEventId: string;
   dedupeKey: string;
+  ticketUrl?: string | null;
+  sourceUrl?: string | null;
+  tvNetwork?: string | null;
+  streamingVideoUrl?: string | null;
+  radioNetwork?: string | null;
+  streamingAudioUrl?: string | null;
 }
 
 export async function upsertEvent(data: EventUpsertInput): Promise<"inserted" | "updated"> {

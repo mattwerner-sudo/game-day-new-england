@@ -113,4 +113,196 @@ export const SCHOOLS_SEED = [
     websiteUrl: "https://bryantbulldogs.com",
     cmsPlatform: "sidearm",
   },
+
+  // Batch 2 (Full D3 rollout, step 1 of Section 3): 14 more schools, verified live on
+  // 2026-08-04 the same way as the batch above (fetched each school's real athletics homepage,
+  // grepped for the dxbhsrqyrr690.cloudfront.net/sidearm.nextgen.sites/... asset domain and/or
+  // a "Sidearm Sports" footer attribution). See CLAUDE.md Section 12 for the full session log,
+  // including 4 Little East candidates and 2 NE10 candidates that were researched but NOT added
+  // (WebFetch blocked with HTTP 403 - likely bot/WAF protection, not confirmed either way) and
+  // the Hamilton College (NESCAC, but Clinton NY) geographic-scope question left open in
+  // Section 8 rather than silently resolved.
+  //
+  // Remaining NESCAC (5 of 6 candidates - Hamilton excluded pending the scope question above):
+  {
+    name: "Wesleyan University",
+    conference: "NESCAC",
+    division: "D3",
+    city: "Middletown",
+    state: "CT",
+    lat: 41.5566,
+    lng: -72.656,
+    websiteUrl: "https://athletics.wesleyan.edu",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Colby College",
+    conference: "NESCAC",
+    division: "D3",
+    city: "Waterville",
+    state: "ME",
+    lat: 44.5588,
+    lng: -69.6325,
+    websiteUrl: "https://colbyathletics.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Bates College",
+    conference: "NESCAC",
+    division: "D3",
+    city: "Lewiston",
+    state: "ME",
+    lat: 44.1046,
+    lng: -70.2064,
+    websiteUrl: "https://gobatesbobcats.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Trinity College",
+    conference: "NESCAC",
+    division: "D3",
+    city: "Hartford",
+    state: "CT",
+    lat: 41.7476,
+    lng: -72.6892,
+    websiteUrl: "https://bantamsports.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Connecticut College",
+    conference: "NESCAC",
+    division: "D3",
+    city: "New London",
+    state: "CT",
+    lat: 41.3712,
+    lng: -72.1004,
+    websiteUrl: "https://camelathletics.com",
+    cmsPlatform: "sidearm",
+  },
+
+  // Little East Conference (6 of 10 sampled candidates - the 6 below all confirmed live
+  // SIDEARM via direct WebFetch; Bridgewater State, Framingham State, Salem State, and
+  // Westfield State returned HTTP 403 to WebFetch and were left out unconfirmed - see
+  // CLAUDE.md Section 12):
+  {
+    name: "UMass Dartmouth",
+    conference: "Little East",
+    division: "D3",
+    city: "North Dartmouth",
+    state: "MA",
+    lat: 41.6362,
+    lng: -70.9829,
+    websiteUrl: "https://corsairathletics.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Keene State College",
+    conference: "Little East",
+    division: "D3",
+    city: "Keene",
+    state: "NH",
+    lat: 42.9337,
+    lng: -72.2779,
+    websiteUrl: "https://keeneowls.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Plymouth State University",
+    conference: "Little East",
+    division: "D3",
+    city: "Plymouth",
+    state: "NH",
+    lat: 43.7564,
+    lng: -71.6887,
+    websiteUrl: "https://athletics.plymouth.edu",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Rhode Island College",
+    conference: "Little East",
+    division: "D3",
+    city: "Providence",
+    state: "RI",
+    lat: 41.8412,
+    lng: -71.4396,
+    websiteUrl: "https://goanchormen.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "University of Southern Maine",
+    conference: "Little East",
+    division: "D3",
+    city: "Gorham",
+    state: "ME",
+    lat: 43.6795,
+    lng: -70.4442,
+    websiteUrl: "https://southernmainehuskies.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Eastern Connecticut State University",
+    conference: "Little East",
+    division: "D3",
+    city: "Willimantic",
+    state: "CT",
+    lat: 41.7148,
+    lng: -72.214,
+    websiteUrl: "https://gowarriorathletics.com",
+    cmsPlatform: "sidearm",
+  },
+
+  // Northeast-10 (3 of 5 sampled candidates, picked for state diversity - Franklin Pierce (NH)
+  // and SNHU (NH) also confirmed live SIDEARM but skipped here since Saint Anselm/NH is already
+  // in the batch above; see CLAUDE.md Section 12):
+  {
+    name: "American International College",
+    conference: "Northeast-10",
+    division: "D2",
+    city: "Springfield",
+    state: "MA",
+    lat: 42.1015,
+    lng: -72.5698,
+    websiteUrl: "https://aicyellowjackets.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Saint Michael's College",
+    conference: "Northeast-10",
+    division: "D2",
+    city: "Colchester",
+    state: "VT",
+    lat: 44.5322,
+    lng: -73.1601,
+    websiteUrl: "https://smcathletics.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Southern Connecticut State University",
+    conference: "Northeast-10",
+    division: "D2",
+    city: "New Haven",
+    state: "CT",
+    lat: 41.3106,
+    lng: -72.9317,
+    websiteUrl: "https://scsuowls.com",
+    cmsPlatform: "sidearm",
+  },
+
+  // Hamilton College - NESCAC, but campus is in Clinton, NY, outside the six-state New England
+  // scope (see CLAUDE.md Section 8/11). Added anyway: Section 11's venue-state WHERE clause is
+  // unconditional, so Hamilton's own home games (venue = NY) will never display regardless of
+  // whether it's seeded here. The only effect of adding it is that its AWAY games at other
+  // NESCAC schools (venue = New England) resolve to a real opponent name instead of the "TBD"
+  // gap noted in Section 7 - pure fix, no scope leakage. Confirmed live SIDEARM 2026-08-04.
+  {
+    name: "Hamilton College",
+    conference: "NESCAC",
+    division: "D3",
+    city: "Clinton",
+    state: "NY",
+    lat: 43.0492,
+    lng: -75.396,
+    websiteUrl: "https://athletics.hamilton.edu",
+    cmsPlatform: "sidearm",
+  },
 ] as const;

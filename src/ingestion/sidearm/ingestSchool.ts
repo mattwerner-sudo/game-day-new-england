@@ -8,6 +8,9 @@ import {
   parseLocation,
   parseMatchup,
   computeDedupeKey,
+  parseTicketUrl,
+  parseStreamingInfo,
+  isFeedStale,
 } from "./normalize";
 import { findSchoolByName, upsertTeam, upsertVenue, upsertEvent } from "../upsert";
 
@@ -42,6 +45,19 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
 
   const icsText = await fetchIcsFeed(hostname, meta.sportId);
   const rawGames = parseIcsEvents(icsText);
+
+  const mostRecentStart = rawGames.reduce<Date | null>(
+    (latest, g) => (!latest || g.start > latest ? g.start : latest),
+    null
+  );
+  if (isFeedStale(mostRecentStart, new Date())) {
+    console.warn(
+      `  [skip] "${meta.title}" (${hostname}/${sportSlug}) - feed is stale, most recent event ` +
+        `${mostRecentStart?.toISOString() ?? "(none)"}, likely a defunct/renamed program page ` +
+        `still linked in site nav, not a real active sport`
+    );
+    return { sportSlug, sportTitle: meta.title, fetched: rawGames.length, inserted: 0, updated: 0, skipped: rawGames.length };
+  }
 
   const sport = sportNameFromTitle(meta.title);
   const gender = genderFromCode(meta.genderCode);
@@ -83,6 +99,22 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
       awayName,
     });
 
+    // Ticket/source links are only trustworthy from the feed that's actually hosting
+    // the game - SIDEARM doesn't surface the opponent's ticket link on an away entry,
+    // and we don't want an away-pass's own school-site link overwriting the home
+    // school's more useful one on whichever pass happens to run second.
+    // Prefer the schedule page's per-game Paciolan/evenue widget link (matched by the
+    // same game_id the ICS URL field carries) over the ICS DESCRIPTION "Tickets:" line -
+    // it's per-game rather than a generic season page, and catches real ticketed games
+    // the DESCRIPTION line omits entirely (see CLAUDE.md).
+    const gameId = game.url?.match(/game_id=(\d+)/)?.[1];
+    const ticketUrl =
+      (gameId && meta.ticketUrlsByGameId.get(gameId)) || parseTicketUrl(game.description);
+    const streaming = parseStreamingInfo(game.description);
+    const linkFields = matchup.isHome
+      ? { ticketUrl, sourceUrl: game.url, ...streaming }
+      : {};
+
     const result = await upsertEvent({
       type: "game",
       sport,
@@ -98,6 +130,7 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
       source: "sidearm",
       sourceEventId: game.uid,
       dedupeKey,
+      ...linkFields,
     });
 
     if (result === "inserted") inserted++;
