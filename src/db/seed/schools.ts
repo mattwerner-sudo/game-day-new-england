@@ -305,4 +305,210 @@ export const SCHOOLS_SEED = [
     websiteUrl: "https://athletics.hamilton.edu",
     cmsPlatform: "sidearm",
   },
+
+  // Batch 3 (2026-08-06): 16 more schools, verified live SIDEARM the same way as prior batches
+  // (fetched each school's real athletics homepage via WebFetch, grepped for the
+  // dxbhsrqyrr690.cloudfront.net/sidearm.nextgen.sites/... asset domain and/or a "Sidearm
+  // Sports" footer attribution; where WebFetch 403'd, fell back to WebSearch for a *direct*
+  // fingerprint match - e.g. a `<school-domain>/sidearmstats/...` result URL on the school's
+  // own domain, not just circumstantial "SIDEARM is a big company" hits). See CLAUDE.md
+  // session log for 2026-08-06 for the full method, corrections, and schools checked but not
+  // added.
+  //
+  // Northeast-10 (D2) - completes full NE10 New England membership (Adelphi/Pace are NY, out
+  // of region): both previously confirmed live SIDEARM in Section 12 (2026-08-04), re-confirmed
+  // here, just never added before now.
+  {
+    name: "Franklin Pierce University",
+    conference: "Northeast-10",
+    division: "D2",
+    city: "Rindge",
+    state: "NH",
+    lat: 42.7539,
+    lng: -72.0087,
+    websiteUrl: "https://fpuravens.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Southern New Hampshire University",
+    conference: "Northeast-10",
+    division: "D2",
+    city: "Manchester",
+    state: "NH",
+    lat: 42.9956,
+    lng: -71.4548,
+    websiteUrl: "https://snhupenmen.com",
+    cmsPlatform: "sidearm",
+  },
+
+  // Little East Conference (D3) - the 3 full members not yet seeded. Note: current Little East
+  // full membership (verified via Wikipedia 2026-08-06) is Eastern Connecticut State, Keene
+  // State, Plymouth State, Rhode Island College, UMass Boston, UMass Dartmouth, Univ. of
+  // Southern Maine, Vermont State University-Castleton, Western Connecticut State - 6 of these 9
+  // were already seeded in Batch 2; these 3 complete the roster.
+  {
+    name: "Western Connecticut State University",
+    conference: "Little East",
+    division: "D3",
+    city: "Danbury",
+    state: "CT",
+    lat: 41.4001,
+    lng: -73.4823,
+    websiteUrl: "https://westconnathletics.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "University of Massachusetts Boston",
+    conference: "Little East",
+    division: "D3",
+    city: "Boston",
+    state: "MA",
+    lat: 42.314,
+    lng: -71.0386,
+    websiteUrl: "https://beaconsathletics.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Vermont State University-Castleton",
+    conference: "Little East",
+    division: "D3",
+    city: "Castleton",
+    state: "VT",
+    lat: 43.6167,
+    lng: -73.1729,
+    websiteUrl: "https://castletonsports.com",
+    cmsPlatform: "sidearm",
+  },
+
+  // MASCAC (D3) - Bridgewater/Framingham/Salem/Westfield State (the schools this batch's
+  // original candidate list called "Little East") turned out to actually be MASCAC schools now
+  // (see session log correction); of the 8 MASCAC members, these 2 confirmed live SIDEARM,
+  // the other 4 (Bridgewater, Framingham, Salem, Westfield) did not - see "not added" notes.
+  {
+    name: "Fitchburg State University",
+    conference: "MASCAC",
+    division: "D3",
+    city: "Fitchburg",
+    state: "MA",
+    lat: 42.5834,
+    lng: -71.8023,
+    websiteUrl: "https://fitchburgfalcons.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Massachusetts College of Liberal Arts",
+    conference: "MASCAC",
+    division: "D3",
+    city: "North Adams",
+    state: "MA",
+    lat: 42.7003,
+    lng: -73.1181,
+    websiteUrl: "https://athletics.mcla.edu",
+    cmsPlatform: "sidearm",
+  },
+
+  // America East (D1) - the New England members beyond Vermont/Bryant already seeded.
+  {
+    name: "University of Maine",
+    conference: "America East",
+    division: "D1",
+    city: "Orono",
+    state: "ME",
+    lat: 44.9012,
+    lng: -68.6712,
+    websiteUrl: "https://goblackbears.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "UMass Lowell",
+    conference: "America East",
+    division: "D1",
+    city: "Lowell",
+    state: "MA",
+    lat: 42.6334,
+    lng: -71.3162,
+    websiteUrl: "https://goriverhawks.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "University of New Hampshire",
+    conference: "America East",
+    division: "D1",
+    city: "Durham",
+    state: "NH",
+    lat: 43.1339,
+    lng: -70.9264,
+    websiteUrl: "https://unhwildcats.com",
+    cmsPlatform: "sidearm",
+  },
+
+  // Hockey East / other D1 (added as time allowed, per this batch's brief - all confirmed live
+  // SIDEARM by direct fingerprint, primary all-sport conference noted per school since several
+  // of these play hockey in Hockey East but most other sports elsewhere):
+  {
+    name: "Merrimack College",
+    conference: "MAAC",
+    division: "D1",
+    city: "North Andover",
+    state: "MA",
+    lat: 42.6903,
+    lng: -71.1245,
+    websiteUrl: "https://merrimackathletics.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "University of Connecticut",
+    conference: "Big East",
+    division: "D1",
+    city: "Storrs",
+    state: "CT",
+    lat: 41.8084,
+    lng: -72.2495,
+    websiteUrl: "https://uconnhuskies.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "University of Massachusetts Amherst",
+    conference: "Mid-American Conference",
+    division: "D1",
+    city: "Amherst",
+    state: "MA",
+    lat: 42.3868,
+    lng: -72.5301,
+    websiteUrl: "https://umassathletics.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Sacred Heart University",
+    conference: "MAAC",
+    division: "D1",
+    city: "Fairfield",
+    state: "CT",
+    lat: 41.1408,
+    lng: -73.2637,
+    websiteUrl: "https://sacredheartpioneers.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "Northeastern University",
+    conference: "CAA",
+    division: "D1",
+    city: "Boston",
+    state: "MA",
+    lat: 42.3398,
+    lng: -71.0892,
+    websiteUrl: "https://nuhuskies.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "University of Rhode Island",
+    conference: "Atlantic 10",
+    division: "D1",
+    city: "Kingston",
+    state: "RI",
+    lat: 41.4901,
+    lng: -71.527,
+    websiteUrl: "https://gorhody.com",
+    cmsPlatform: "sidearm",
+  },
 ] as const;

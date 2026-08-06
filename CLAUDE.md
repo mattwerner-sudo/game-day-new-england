@@ -532,11 +532,13 @@ the same two-different-keys-for-one-game problem venue did. See `findSchoolByNam
    `~/ne-sports-aggregator` (this repo).
 2. ✅ Set up Postgres schema per Section 5 as a Drizzle migration (see Section 9 for the
    Drizzle-vs-Prisma decision), sized for ~110 schools from the start.
-3. ⏳ Master school registry: 25 of ~110 schools are seeded and fully ingested
-   (`src/db/seed/schools.ts`) — the original 10-school validation batch plus 15 more added
-   2026-08-04 (14 in Section 12, Hamilton College resolved and added in Section 13). Live in the
-   local DB as of Section 13: 25 schools, 628 teams, 9,151 events, zero ingestion errors. Full
-   registry is still the later-phase goal (Section 3 step 2).
+3. ⏳ Master school registry: 41 of ~101 schools are now in `src/db/seed/schools.ts` as of
+   2026-08-06 (Section 22), but only the original **25 are actually live/ingested in the local
+   DB** (628 teams, 9,151 events, zero ingestion errors, per Section 13/21). The 16 schools added
+   in Section 22's batch-3 pass are source-file-only, same status Batch 2 was in between Sections
+   12 and 13 — they need a migrate → seed → ingest cycle (with the dev server stopped first, per
+   Section 10) before they show up in the app. Full registry is still the later-phase goal
+   (Section 3 step 2).
 4. ✅ Validation batch CMS audit done by actually fetching each school's real schedule page —
    see Section 9 for what was found (materially different from what this section originally
    assumed).
@@ -1199,3 +1201,124 @@ already-orphaned stale-sport rows beyond the two found here - the full `--all` r
 checked for every stale-skip case with nonzero `fetched` count (the only way old bad rows could
 already exist), and only these two had any, so this should be a complete cleanup for the current
 25-school batch specifically. Re-check this when the next batch of schools is added.
+
+## 22. Session log: 2026-08-06 — batch 3: staging 16 more schools (Franklin Pierce/SNHU landed,
+Little East completed, first America East/Hockey East D1 slice)
+
+Per Section 3's "Full D3 rollout" step (plus a deliberate early slice of D2/D1 per this session's
+brief), researched and staged 16 more schools — **source file only**
+(`src/db/seed/schools.ts`); did **not** run `migrate.ts`/`seed.ts`/`ingest.ts`, per Section 10's
+PGlite concurrency rule. `SCHOOLS_SEED` now has 41 schools in source; the DB itself is unchanged
+at 25 schools/628 teams/9,151 events until a future session runs the migrate → seed → ingest
+cycle with the dev server stopped.
+
+**Method:** same fingerprint as prior batches — fetched each candidate's real athletics homepage
+via WebFetch, checked for the `dxbhsrqyrr690.cloudfront.net/sidearm.nextgen.sites/...` asset
+domain and/or "Sidearm Sports" footer attribution. Several schools' homepages returned HTTP 403
+to WebFetch (same WAF/bot-protection pattern as Section 12's Little East 403s); for those, fell
+back to WebSearch **but only counted a school as confirmed if the search surfaced a direct
+`<school-domain>/sidearmstats/...` result URL on that school's own domain**, not just generic
+"SIDEARM is a big company" hits — this is a stricter bar than Section 12 used for its
+circumstantial (and correctly rejected) evidence, applied consistently to every school below.
+
+**16 schools added, all confirmed live SIDEARM by direct fingerprint (WebFetch cloudfront/footer
+match, or a same-domain `/sidearmstats/` WebSearch hit) on 2026-08-06:**
+- **Northeast-10 (2 — completes full NE10 New England membership):** Franklin Pierce University,
+  Southern New Hampshire University. Both were already confirmed live SIDEARM back in Section 12
+  (2026-08-04) but never added, purely deprioritized for state diversity at the time — re-verified
+  live today, unchanged. NE10's only other full members are Adelphi and Pace (both NY, out of
+  region), so NE10's New England roster is now complete across the 8 schools in the seed.
+- **Little East (3 — completes full Little East membership):** Western Connecticut State
+  University, University of Massachusetts Boston, Vermont State University-Castleton (formerly
+  Castleton University).
+- **MASCAC (2, new conference in the seed):** Fitchburg State University, Massachusetts College
+  of Liberal Arts (MCLA).
+- **America East (3 — all New England members beyond Vermont/Bryant, already seeded):**
+  University of Maine, UMass Lowell, University of New Hampshire.
+- **Hockey East / other D1 (6, added per this session's brief to take a first slice beyond
+  America East):** Merrimack College (MAAC), University of Connecticut (Big East), University of
+  Massachusetts Amherst (Mid-American Conference — moved from Atlantic 10 for 2025-26; hockey
+  stays in Hockey East, noted since the `conference` column reflects the primary all-sport
+  conference, same convention as the rest of the seed), Sacred Heart University (MAAC — its
+  official athletics URL, `sacredheartpioneers.com`, actually resolves through
+  `sacredheart.sidearmsports.com`, about as direct a SIDEARM fingerprint as exists), Northeastern
+  University (CAA), University of Rhode Island (Atlantic 10).
+
+**A real correction to this session's own starting assumptions, found via Wikipedia (not
+guessed):** the brief's candidate list called Bridgewater State/Framingham State/Salem
+State/Westfield State "Little East Conference" schools, following Section 12's framing from
+2026-08-04. **That's stale — none of the four are current Little East members.** Per Little East
+Conference's Wikipedia page (checked 2026-08-06): current full membership is Eastern Connecticut
+State, Keene State, Plymouth State, Rhode Island College, UMass Boston, UMass Dartmouth,
+University of Southern Maine, Vermont State University-Castleton, and Western Connecticut State
+(9 schools — 6 already seeded pre-this-session, the other 3 added above). Bridgewater State,
+Framingham State, Salem State, and Westfield State are **former** Little East associate members
+that departed after the 2022 fall season when MASCAC took over field hockey sponsorship for
+those schools; their actual current primary conference is **MASCAC** (confirmed via
+`mascac.com`-referencing search results), alongside Fitchburg State, MCLA, Massachusetts Maritime
+Academy, and Worcester State. Also note: Vermont State University-Castleton is itself scheduled
+to leave Little East for MASCAC after the 2026-27 season per the same Wikipedia page — not acted
+on here since it's still a live Little East member today, but worth re-checking conference
+labels for Castleton in a future session once that move actually happens.
+
+**Not added — researched but skipped, with reasons (mirrors Section 12's practice of documenting
+rejections instead of silently dropping them):**
+- **Bridgewater State (`bsubears.com`), Framingham State (`fsurams.com`), Salem State
+  (`salemstatevikings.com`), Westfield State (`westfieldstateowls.com`)** — all four still
+  return HTTP 403 to WebFetch on both the homepage and a schedule subpage, same as Section 12's
+  finding two sessions ago (nothing changed). WebSearch fallback found no direct
+  `<domain>/sidearmstats/...` hit on any of the four domains themselves — only generic SIDEARM
+  company references — so none meet this session's fingerprint bar. Left out, same as Section
+  12. (Also no longer Little East candidates regardless per the correction above — they'd be
+  MASCAC additions if/when confirmed.)
+- **Massachusetts Maritime Academy (`mmabucs.com`), Worcester State University
+  (`wsulancers.com`)** — same pattern: WebFetch 403, no direct same-domain `sidearmstats` hit
+  from WebSearch. Left out as unconfirmed rather than guessed. Both are MASCAC schools (Mass
+  Maritime's primary conference; it's also a Little East *associate* member for men's lacrosse
+  only, which doesn't change its primary-conference classification).
+
+**Net result of this session:** `SCHOOLS_SEED` in `src/db/seed/schools.ts` now has 41 schools
+(25 + 16), all source-only pending a migrate/seed/ingest run — the 16 new ones need the same
+follow-up Section 12's batch needed before Section 13 ingested it. 6 schools (Bridgewater,
+Framingham, Salem, Westfield, Mass Maritime, Worcester State) were investigated and intentionally
+not added, all for the same reason (WebFetch 403 + no confirmable same-domain SIDEARM
+fingerprint via WebSearch), not a data-quality concern with the schools themselves. Good
+next-session candidate: retry these 6 with an actual browser-based fetch instead of the
+sandboxed WebFetch tool, per Section 12's same standing suggestion.
+
+## 23. Session log: 2026-08-06 — first production deployment, live
+
+**The app is genuinely live**, at **https://game-day-new-england.vercel.app** — first real
+deployment, closing out the "Not done" item that's been carried since Section 7. Founder set this
+up directly through the Vercel dashboard (New Project → import `mattwerner-sudo/game-day-new-
+england` → `DATABASE_URL` env var set to the Neon connection string from Section 22's work →
+Deploy), not something done from this session's tools. One real hiccup along the way: the first
+attempt landed on a "clone into a brand-new repository" flow instead of importing the existing
+repo - would have silently broken continuous deployment (future `git push` wouldn't trigger new
+builds) had it gone through. Caught before clicking through; the correct "Importing from GitHub"
+flow (existing repo, no new-repo-name field) is the one that actually worked.
+
+**Verified live and working end-to-end**, not just trusted the dashboard's "Ready" status:
+main list page renders all 25 schools and the cleaned-up sport list (Section 21's fix confirmed
+holding in production); September 2026 shows 814 real games querying live from Neon; `/follow`
+renders correctly with the real school picker.
+
+**Known gap, not yet closed**: `RESEND_API_KEY` isn't set in Vercel's environment variables, so
+the fan-follow confirmation/digest emails still only console-log to Vercel's function logs rather
+than actually delivering - per Section 17's dry-run design, the registration/consent flow itself
+works correctly in production, real email sending is a separate, still-pending step needing the
+founder's own Resend account (same category as the Neon/Vercel accounts already flagged in
+Section 14).
+
+**Also this session**: staged 16 more schools (25 → 41 in `src/db/seed/schools.ts`, not yet
+migrated/ingested - source-file only, per the established batching discipline). Completes
+Northeast-10 and Little East's actual current membership (found and corrected a stale assumption
+inherited from Section 12: Bridgewater/Framingham/Salem/Westfield State left Little East for
+MASCAC after 2022, not still-unconfirmed Little East candidates as previously logged) and adds a
+first slice of D1 programs. **Real, not-yet-resolved schema gap surfaced by the D1 additions**:
+several (UConn, UMass Amherst, Northeastern, Merrimack, Sacred Heart) don't have one clean
+conference the way D3 schools do - they play hockey in Hockey East but their other sports are in
+a different primary conference (e.g. UConn is Big East outside hockey). The single `conference`
+column per school (Section 5's schema) can't represent this; as staged, these schools' hockey
+games would file under the wrong League filter value. Not fixed this session - flagged for a
+real decision before this batch gets ingested, not silently ingested with known-wrong data.
