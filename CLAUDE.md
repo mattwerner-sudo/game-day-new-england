@@ -1322,3 +1322,63 @@ a different primary conference (e.g. UConn is Big East outside hockey). The sing
 column per school (Section 5's schema) can't represent this; as staged, these schools' hockey
 games would file under the wrong League filter value. Not fixed this session - flagged for a
 real decision before this batch gets ingested, not silently ingested with known-wrong data.
+
+## 24. Session log: 2026-08-06 (continued) — conference-per-team fix, in progress at session end
+
+**Fixed the schema gap from Section 23** by adding nullable `teams.conference`/`teams.division`
+override columns (migration `drizzle/0006_yielding_princess_powerful.sql`, purely additive) -
+a team inherits its school's conference/division unless explicitly overridden. New
+`src/ingestion/sidearm/conferenceOverrides.ts` holds the actual verified exceptions, keyed by
+exact school name + sport + gender; `upsertTeam()` applies them on both insert and update (so
+fixing/adding an override entry self-corrects on the next ingest run, not just for brand-new
+teams). `getFilteredEvents()`'s League filter and `getFilterOptions()`'s league dropdown both now
+`COALESCE` team-level override over the school's default.
+
+**Verified via real research, not assumption** (WebFetch/WebSearch against Hockey East and
+Atlantic Hockey America's actual current membership, cross-checked against each school's own live
+SIDEARM nav to confirm which genders actually have a program): Bentley and American International
+College are D2/Northeast-10 overall but D1 men's ice hockey in Atlantic Hockey America - and this
+was **already live in production with wrong data since Day 1**, not something the new schools
+introduced. Vermont, Connecticut, Maine, Merrimack, and Northeastern are D1 but their primary
+conference (America East/Big East/MAAC/CAA) doesn't sponsor hockey at all, so their hockey
+programs (both genders where they exist) play in Hockey East instead.
+
+**A separate, real adapter limitation was found and worked around, not silently ingested around:**
+UMass Lowell, University of New Hampshire, University of Massachusetts Amherst, and Sacred Heart
+University are confirmed live SIDEARM, but their homepage HTML has zero static
+`/sports/<slug>/schedule` nav links at all (likely a JS-rendered mega-menu, unlike every other
+school ingested so far) - confirmed their sport pages exist fine at the standard URL when guessed
+directly, so `discoverSportSlugs()` would silently return zero sports for them, which would show
+up as a school permanently stuck at 0 games rather than a real gap. **Deliberately left these 4
+out of this batch** (removed from `src/db/seed/schools.ts`, documented inline with the reason)
+rather than seed a broken-looking entry - fixing this for real needs either a headless-browser-
+based discovery fallback or manual per-school sport-slug curation, not attempted this session.
+
+**Net school count this session: 41 staged (Section 23) → 37 after removing the 4 broken-
+discovery schools.**
+
+**State at session end - deliberately not pushed to GitHub/Vercel yet:**
+- Local PGlite: fully migrated, re-ingested, and verified clean - 37 schools, 836 teams, 11,819
+  events, zero errors, all 12 expected conference/division overrides confirmed correct via direct
+  query (Bentley/AIC → Atlantic Hockey America D1; Vermont/UConn/Maine/Merrimack/Northeastern →
+  Hockey East).
+- Neon (production database): migrated and seeded with the new schema/37 schools, but the full
+  re-ingest hit unusually heavy transient errors (10+ failed queries across many schools/sports in
+  one run - network flakiness against Neon over a long-duration run, not a code bug, same class of
+  issue as the isolated "fetch failed" errors seen throughout this session, just more of them at
+  once). A retry was started to clean this up but **did not finish before the session ended** -
+  only 1 of 37 schools had completed when the session was called for the night.
+- **Production (Vercel/game-day-new-england.vercel.app) is unaffected and still safe**: the
+  currently-deployed code is from commit `f2adbee`, which never references `teams.conference`/
+  `division` at all, so it's unaffected by the new (purely additive) Neon schema and the
+  in-progress re-ingest - worst case it just doesn't see the override logic or the 12 new schools
+  yet, nothing is broken. The new code (schema.ts, upsert.ts, ingestSchool.ts, queries.ts,
+  conferenceOverrides.ts, schools.ts, migration 0006) is uncommitted, sitting locally only.
+
+**Next session should, in order:** (1) check whether the Neon retry is still running or was
+interrupted (`ps aux | grep tsx`); if interrupted, just re-run `ingest.ts --all` against Neon
+again (idempotent, safe) until a run comes back clean; (2) verify via `inspect.ts` + the same
+override spot-check used for local; (3) only then commit + push the code (this triggers Vercel's
+auto-redeploy, which is why Neon needs to be ready first - migrate-then-deploy ordering, not the
+other way around); (4) verify the League filter actually works for "Hockey East"/"Atlantic Hockey
+America" on the live production site before calling it done.

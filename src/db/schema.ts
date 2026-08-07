@@ -47,6 +47,15 @@ export const teams = pgTable(
       .references(() => schools.id),
     sport: text("sport").notNull(),
     gender: text("gender").notNull(), // "mens" | "womens" | "coed"
+    // Overrides the school's own conference/division for this specific sport - real,
+    // common case in New England: several schools field a D1 hockey program in a
+    // dedicated hockey conference (Hockey East, Atlantic Hockey America) while every
+    // other sport plays in a different, often lower-division, conference (e.g. Bentley
+    // and American International College are D2/Northeast-10 overall but D1/Atlantic
+    // Hockey America for men's ice hockey specifically). Null means "same as the
+    // school" - most teams never need this set.
+    conference: text("conference"),
+    division: text("division"),
   },
   (table) => [
     uniqueIndex("teams_school_sport_gender_idx").on(

@@ -1,5 +1,5 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, asc, eq, gte, inArray, lt, or } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
 import { db } from "./client";
 import { events, teams, schools, venues } from "./schema";
 
@@ -127,8 +127,13 @@ export async function getFilteredEvents(
   // location - not either participating school's home state.
   if (filters.state) conditions.push(eq(venues.state, filters.state));
   // League and school are about *who's playing*, so match either side of the matchup.
+  // A team's own conference (set for the real exceptions - see conferenceOverrides.ts,
+  // e.g. Bentley's hockey team plays Atlantic Hockey America despite Bentley itself
+  // being a Northeast-10 school) takes precedence over the school's default conference.
   if (filters.league) {
-    conditions.push(or(eq(homeSchools.conference, filters.league), eq(awaySchools.conference, filters.league))!);
+    const homeLeague = sql`coalesce(${homeTeams.conference}, ${homeSchools.conference})`;
+    const awayLeague = sql`coalesce(${awayTeams.conference}, ${awaySchools.conference})`;
+    conditions.push(or(eq(homeLeague, filters.league), eq(awayLeague, filters.league))!);
   }
   if (filters.schoolId) {
     conditions.push(or(eq(homeSchools.id, filters.schoolId), eq(awaySchools.id, filters.schoolId))!);
@@ -234,18 +239,26 @@ export interface FilterOptions {
 
 /** Populate filter dropdowns from what's actually in the seeded/ingested data today. */
 export async function getFilterOptions(): Promise<FilterOptions> {
-  const [divisionRows, schoolRows, sportRows, leagueRows] = await Promise.all([
+  const [divisionRows, schoolRows, sportRows, schoolLeagueRows, teamLeagueRows] = await Promise.all([
     db.selectDistinct({ value: schools.division }).from(schools).orderBy(asc(schools.division)),
     db.select({ id: schools.id, name: schools.name }).from(schools).orderBy(asc(schools.name)),
     db.selectDistinct({ value: events.sport }).from(events).orderBy(asc(events.sport)),
-    db.selectDistinct({ value: schools.conference }).from(schools).orderBy(asc(schools.conference)),
+    db.selectDistinct({ value: schools.conference }).from(schools),
+    // Team-level conference overrides (e.g. "Hockey East", "Atlantic Hockey America")
+    // aren't a school's own conference, so they'd never show up in the query above -
+    // see conferenceOverrides.ts.
+    db.selectDistinct({ value: teams.conference }).from(teams).where(isNotNull(teams.conference)),
   ]);
+
+  const leagues = [
+    ...new Set([...schoolLeagueRows.map((r) => r.value), ...teamLeagueRows.map((r) => r.value as string)]),
+  ].sort();
 
   return {
     divisions: divisionRows.map((r) => r.value),
     states: NE_STATES,
     schools: schoolRows,
     sports: sportRows.map((r) => r.value),
-    leagues: leagueRows.map((r) => r.value),
+    leagues,
   };
 }

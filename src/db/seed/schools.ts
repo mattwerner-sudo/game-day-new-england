@@ -408,6 +408,17 @@ export const SCHOOLS_SEED = [
   },
 
   // America East (D1) - the New England members beyond Vermont/Bryant already seeded.
+  // UMass Lowell, University of New Hampshire, and University of Massachusetts Amherst
+  // were researched and confirmed live SIDEARM but deliberately NOT added here: their
+  // homepage HTML has no static /sports/<slug>/schedule nav links at all (likely a
+  // JS-rendered mega-menu, unlike every other school in this file) - discoverSportSlugs()
+  // would silently find zero sports for them, which would show up as a school with
+  // permanently 0 games rather than a real coverage gap. Confirmed their sport pages do
+  // exist at the standard URL when guessed directly (e.g. /sports/mens-ice-hockey/schedule
+  // returns 200), so this is a real, fixable adapter limitation for schools with a
+  // JS-driven nav, not a data problem - needs either a headless-browser-based discovery
+  // fallback or manual per-school sport-slug curation before adding them. Same finding for
+  // Sacred Heart University (sacredheartpioneers.com).
   {
     name: "University of Maine",
     conference: "America East",
@@ -419,32 +430,14 @@ export const SCHOOLS_SEED = [
     websiteUrl: "https://goblackbears.com",
     cmsPlatform: "sidearm",
   },
-  {
-    name: "UMass Lowell",
-    conference: "America East",
-    division: "D1",
-    city: "Lowell",
-    state: "MA",
-    lat: 42.6334,
-    lng: -71.3162,
-    websiteUrl: "https://goriverhawks.com",
-    cmsPlatform: "sidearm",
-  },
-  {
-    name: "University of New Hampshire",
-    conference: "America East",
-    division: "D1",
-    city: "Durham",
-    state: "NH",
-    lat: 43.1339,
-    lng: -70.9264,
-    websiteUrl: "https://unhwildcats.com",
-    cmsPlatform: "sidearm",
-  },
 
   // Hockey East / other D1 (added as time allowed, per this batch's brief - all confirmed live
-  // SIDEARM by direct fingerprint, primary all-sport conference noted per school since several
-  // of these play hockey in Hockey East but most other sports elsewhere):
+  // SIDEARM by direct fingerprint AND confirmed working sport-discovery via static nav links,
+  // unlike the three schools noted above. Conference here is each school's PRIMARY/all-sport
+  // conference - several of these (Vermont, Connecticut, Maine above, Merrimack, Northeastern)
+  // actually play ice hockey in Hockey East regardless of their primary conference, since
+  // America East/Big East/MAAC/CAA don't sponsor D1 hockey at all. That's handled per-team,
+  // not per-school, via src/ingestion/sidearm/conferenceOverrides.ts - see CLAUDE.md):
   {
     name: "Merrimack College",
     conference: "MAAC",
@@ -465,28 +458,6 @@ export const SCHOOLS_SEED = [
     lat: 41.8084,
     lng: -72.2495,
     websiteUrl: "https://uconnhuskies.com",
-    cmsPlatform: "sidearm",
-  },
-  {
-    name: "University of Massachusetts Amherst",
-    conference: "Mid-American Conference",
-    division: "D1",
-    city: "Amherst",
-    state: "MA",
-    lat: 42.3868,
-    lng: -72.5301,
-    websiteUrl: "https://umassathletics.com",
-    cmsPlatform: "sidearm",
-  },
-  {
-    name: "Sacred Heart University",
-    conference: "MAAC",
-    division: "D1",
-    city: "Fairfield",
-    state: "CT",
-    lat: 41.1408,
-    lng: -73.2637,
-    websiteUrl: "https://sacredheartpioneers.com",
     cmsPlatform: "sidearm",
   },
   {

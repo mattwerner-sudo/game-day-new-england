@@ -12,6 +12,7 @@ import {
   parseStreamingInfo,
   isFeedStale,
 } from "./normalize";
+import { getTeamOverride } from "./conferenceOverrides";
 import { findSchoolByName, upsertTeam, upsertVenue, upsertEvent } from "../upsert";
 
 export interface School {
@@ -61,7 +62,8 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
 
   const sport = sportNameFromTitle(meta.title);
   const gender = genderFromCode(meta.genderCode);
-  const ownTeamId = await upsertTeam(school.id, sport, gender);
+  const ownOverride = getTeamOverride(school.name, sport, gender);
+  const ownTeamId = await upsertTeam(school.id, sport, gender, ownOverride);
 
   let inserted = 0;
   let updated = 0;
@@ -89,8 +91,9 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
 
     const venueId = await upsertVenue(venueName, homeSchoolId, city, state);
 
+    const opponentOverride = opponent ? getTeamOverride(opponent.name, sport, gender) : null;
     const opponentTeamId = opponent
-      ? await upsertTeam(opponent.id, sport, gender)
+      ? await upsertTeam(opponent.id, sport, gender, opponentOverride)
       : null;
 
     const dedupeKey = computeDedupeKey({
@@ -120,7 +123,7 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
       sport,
       gender,
       season: deriveSeason(sport, game.start),
-      division: school.division,
+      division: ownOverride?.division ?? school.division,
       homeTeamId: matchup.isHome ? ownTeamId : opponentTeamId,
       awayTeamId: matchup.isHome ? opponentTeamId : ownTeamId,
       venueId,

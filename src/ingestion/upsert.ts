@@ -20,10 +20,21 @@ export async function findSchoolByName(
   return rows[0] ?? null;
 }
 
-export async function upsertTeam(schoolId: string, sport: string, gender: string): Promise<string> {
+export async function upsertTeam(
+  schoolId: string,
+  sport: string,
+  gender: string,
+  override?: { conference: string; division?: string } | null
+): Promise<string> {
   const inserted = await db
     .insert(teams)
-    .values({ schoolId, sport, gender })
+    .values({
+      schoolId,
+      sport,
+      gender,
+      conference: override?.conference ?? null,
+      division: override?.division ?? null,
+    })
     .onConflictDoNothing()
     .returning({ id: teams.id });
 
@@ -34,6 +45,16 @@ export async function upsertTeam(schoolId: string, sport: string, gender: string
     .from(teams)
     .where(and(eq(teams.schoolId, schoolId), eq(teams.sport, sport), eq(teams.gender, gender)))
     .limit(1);
+
+  // Backfill/correct the override on an already-existing team row too, so fixing or
+  // adding an entry in conferenceOverrides.ts self-corrects on the next ingest run
+  // rather than only applying to brand-new teams.
+  if (override) {
+    await db
+      .update(teams)
+      .set({ conference: override.conference, division: override.division ?? null })
+      .where(eq(teams.id, existing[0].id));
+  }
 
   return existing[0].id;
 }

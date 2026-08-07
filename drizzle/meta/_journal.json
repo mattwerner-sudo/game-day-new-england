@@ -43,6 +43,13 @@
       "when": 1785948690625,
       "tag": "0005_nasty_zarda",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1786051273401,
+      "tag": "0006_yielding_princess_powerful",
+      "breakpoints": true
     }
   ]
 }
