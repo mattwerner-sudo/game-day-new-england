@@ -7,9 +7,15 @@
  *
  * - Bentley, American International College: D2/Northeast-10 overall, D1 men's ice
  *   hockey in Atlantic Hockey America.
- * - Vermont, Connecticut, Maine, Merrimack, Northeastern: D1, but their primary
- *   conference (America East, Big East, MAAC, CAA - none of which sponsor D1 hockey)
- *   doesn't cover ice hockey; their hockey programs play in Hockey East instead.
+ * - Sacred Heart: D1/MAAC overall (MAAC doesn't sponsor hockey), both hockey programs
+ *   in Atlantic Hockey America.
+ * - Vermont, Connecticut, Maine, Merrimack, Northeastern, UMass Lowell, UMass Amherst,
+ *   New Hampshire, Boston College, Boston University, Providence: D1, but their primary
+ *   conference (America East, Big East, MAAC, CAA, ACC, Patriot League - none of which
+ *   sponsor D1 hockey) doesn't cover ice hockey; their hockey programs play in Hockey East
+ *   instead. UMass Lowell and UMass Amherst only field men's ice hockey (no women's
+ *   program at either, confirmed via each school's own real sport list, not assumed) -
+ *   only a mens override exists for those two; every other school here fields both.
  *
  * Keyed by school name (matching src/db/seed/schools.ts exactly) + sport + gender.
  */
@@ -24,6 +30,8 @@ const OVERRIDES: Record<string, TeamOverride> = {
     conference: "Atlantic Hockey America",
     division: "D1",
   },
+  "Sacred Heart University|ice hockey|mens": { conference: "Atlantic Hockey America" },
+  "Sacred Heart University|ice hockey|womens": { conference: "Atlantic Hockey America" },
   "University of Vermont|ice hockey|mens": { conference: "Hockey East" },
   "University of Vermont|ice hockey|womens": { conference: "Hockey East" },
   "University of Connecticut|ice hockey|mens": { conference: "Hockey East" },
@@ -34,6 +42,16 @@ const OVERRIDES: Record<string, TeamOverride> = {
   "Merrimack College|ice hockey|womens": { conference: "Hockey East" },
   "Northeastern University|ice hockey|mens": { conference: "Hockey East" },
   "Northeastern University|ice hockey|womens": { conference: "Hockey East" },
+  "University of New Hampshire|ice hockey|mens": { conference: "Hockey East" },
+  "University of New Hampshire|ice hockey|womens": { conference: "Hockey East" },
+  "UMass Lowell|ice hockey|mens": { conference: "Hockey East" },
+  "University of Massachusetts Amherst|ice hockey|mens": { conference: "Hockey East" },
+  "Boston College|ice hockey|mens": { conference: "Hockey East" },
+  "Boston College|ice hockey|womens": { conference: "Hockey East" },
+  "Boston University|ice hockey|mens": { conference: "Hockey East" },
+  "Boston University|ice hockey|womens": { conference: "Hockey East" },
+  "Providence College|ice hockey|mens": { conference: "Hockey East" },
+  "Providence College|ice hockey|womens": { conference: "Hockey East" },
 };
 
 export function getTeamOverride(

@@ -15,7 +15,19 @@ async function loadSchool(nameFragment: string): Promise<School> {
 
 async function ingestOneSchool(school: School, sportSlugs?: string[]) {
   const hostname = new URL(school.websiteUrl).hostname;
-  const slugs = sportSlugs && sportSlugs.length > 0 ? sportSlugs : await discoverSportSlugs(hostname);
+  let slugs: string[];
+  if (sportSlugs && sportSlugs.length > 0) {
+    slugs = sportSlugs;
+  } else {
+    try {
+      slugs = await discoverSportSlugs(hostname);
+    } catch (err) {
+      // Pre-existing gap this fixes: discovery failing for one school (unreachable site,
+      // DNS issue, etc.) used to crash the whole --all run for every remaining school.
+      console.error(`  [error] sport discovery failed for ${hostname}: ${(err as Error).message}`);
+      slugs = [];
+    }
+  }
 
   console.log(`\n=== ${school.name} (${hostname}) — ${slugs.length} sport(s) ===`);
 
