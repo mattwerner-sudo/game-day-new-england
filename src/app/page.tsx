@@ -158,7 +158,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
               day: "numeric",
             })}{" "}
             · {events.length} game{events.length === 1 ? "" : "s"}
-            {hasFilters ? " matching your filters" : " across the 25-school batch"}
+            {hasFilters ? " matching your filters" : " across the 37-school batch"}
           </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -331,7 +331,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
           <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
             <p className="text-zinc-600 dark:text-zinc-400">
               No games {range === "today" ? "today" : range === "week" ? "in the next 7 days" : range === "month" ? "that month" : "this weekend"}
-              {hasFilters ? " match your filters" : ""} in the current 25-school batch.
+              {hasFilters ? " match your filters" : ""} in the current 37-school batch.
               Most varsity seasons run fall (Aug–Nov), winter (Nov–Mar), and spring (Mar–May) —
               check back closer to the season, widen ingestion coverage, or adjust your filters.
             </p>

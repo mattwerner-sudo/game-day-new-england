@@ -1382,3 +1382,32 @@ override spot-check used for local; (3) only then commit + push the code (this t
 auto-redeploy, which is why Neon needs to be ready first - migrate-then-deploy ordering, not the
 other way around); (4) verify the League filter actually works for "Hockey East"/"Atlantic Hockey
 America" on the live production site before calling it done.
+
+## 25. Session log: 2026-08-07 — Section 24 finished: Neon recovered, code pushed, verified live
+
+**The overnight retry from Section 24 was actually stuck, not just slow** - only 3 of 37 schools
+completed between 10:44 PM and the next morning (normal runs take 15-25 min). Killed it and ran a
+clean retry, which completed normally in a few minutes with zero errors - confirms this was a
+hung network connection to Neon, not a real problem with the ingestion logic itself. All 12
+expected conference/division overrides verified correct on Neon via direct query, matching local
+exactly.
+
+**Pushed commit `73ede42`** (schema + conference-override code + 37-school seed) once Neon was
+confirmed ready - migrate/ingest-then-deploy ordering, per Section 24's own plan.
+
+**Real gap caught in verification, not assumed fixed:** right after pushing, the live site's
+League dropdown was still missing "Hockey East"/"Atlantic Hockey America" - initially concerning,
+but tracing it through confirmed this was Vercel's build still in progress (the school list
+already showed 37 schools because that query is unchanged between code versions and reads live
+from Neon regardless of which app code is deployed; the League list specifically requires the new
+code, so its absence was the actual tell that the old deployment was still live, not a bug in the
+new code, which a direct `getFilterOptions()` call against Neon confirmed was already returning
+the correct list). Rechecked after the build finished and it was correct. **Verified functionally,
+not just that the option exists**: filtering by "Hockey East" in October 2026 correctly surfaces
+Vermont's games including ones against Bentley and SNHU (neither of which is Hockey East
+themselves) - confirms the existing "match either side of the matchup" League semantic (Section
+10) composes correctly with the new per-team override.
+
+**Also fixed**: `src/app/page.tsx` still hardcoded "25-school batch" in two places (same class of
+stale-copy issue as Section 13's "10-school validation batch" fix) - updated to "37-school batch".
+Verified locally; not yet pushed as of this log entry.
