@@ -1527,3 +1527,45 @@ seed → ingest for the full 83-school batch once the currently-running ingest p
 finished and no dev server is active; (3) if/when a PrestoSports adapter is ever prioritized, the
 20 schools rejected this session are a ready-made target list, not a from-scratch research
 project.
+
+## 27. Session log: 2026-08-07 (continued) — 83-school batch ingested locally, one real bug found
+
+Ran `migrate.ts` + `seed.ts` + `ingest.ts --all` locally for the full 83-school batch staged in
+Section 26. First pass: 83 schools, zero errors, 2,167 teams, 28,649 events - but a spot-check of
+the conference-override count (expected 24 overridden teams, found 23) caught a real bug, not
+assumed clean just because there were no ingestion errors.
+
+**Bug found: UMass Amherst's SIDEARM platform titles men's ice hockey bare "Hockey"**, not
+"Men's/Women's Ice Hockey" like every other school. `sportNameFromTitle()` normalized this to
+`sport = "hockey"` instead of `"ice hockey"` - a school-specific sport name invisible to both the
+Sport filter's "Ice Hockey" option and `conferenceOverrides.ts`'s lookup key (which is keyed on
+the normalized sport name). **Fixed** in `src/ingestion/sidearm/normalize.ts`: an exact-match
+special case maps bare `"hockey"` → `"ice hockey"` (exact match only, so it can't misfire on
+"field hockey"). Verified via a single-school re-ingest before trusting it: the override now
+applies correctly (`conference: "Hockey East"`), and existing events updated in place rather than
+duplicating (dedupeKey doesn't include sport, confirmed via `updated: 34, inserted: 0` in that
+targeted run).
+
+**State as of this entry - a full local re-ingest is running in the background to apply this fix
+everywhere** (not just UMass Amherst - the same title quirk could exist at other schools not yet
+spot-checked) and clean up orphaned team rows left over from before the fix (confirmed 4 stray
+event references to the old `sport = "hockey"` team row before this re-run). **`normalize.ts` is
+edited and `tsc --noEmit` clean but NOT YET COMMITTED.** Neon has not been touched at all with the
+83-school batch yet - it's still on the 37-school data from Section 25.
+
+**Next steps, in order, once the running re-ingest finishes:** (1) verify via `inspect.ts` - expect
+83 schools, and re-check the 24-overridden-teams count now resolves cleanly; (2) spot-check no
+other schools have a similar bare-title quirk before assuming this one fix is complete coverage;
+(3) commit + push `normalize.ts`; (4) migrate/seed/ingest the 83-school batch against Neon
+(currently still on 37 schools); (5) verify Neon matches local; (6) only then does this become
+safe to rely on for League-filter correctness across the new schools.
+
+**Resolved:** re-ingest confirmed 24/24 overridden teams correct, but a residual bug remained -
+5 events still referenced UMass Amherst's old orphaned `sport='hockey'` team row after the
+re-ingest (not fixed by re-running ingestion itself; root cause not fully chased down given
+context constraints, but consistent with an opponent-side resolution touching those 5 specific
+games in a way the school's own re-ingest pass didn't revisit). Fixed directly: repointed those
+5 events' team references to the correct `sport='ice hockey'` team, then deleted all 15 now-fully-
+orphaned `sport='hockey'` team rows (verified zero event references before deleting each). Final
+local state: 83 schools, 2,153 teams, 28,653 events, zero orphaned hockey-sport rows. Not yet
+committed or pushed to Neon as of this entry.

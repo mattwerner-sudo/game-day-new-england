@@ -12,12 +12,19 @@ export function genderFromCode(code: string): "mens" | "womens" | "coed" {
 
 /** "Women's Soccer" -> "soccer", "Football" -> "football", "Field Hockey" -> "field hockey" */
 export function sportNameFromTitle(title: string): string {
-  return title
+  const normalized = title
     .replace(/^(men'?s|women'?s)\s+/i, "")
     .replace(/\s*&\s*/g, " and ") // "Track & Field" and "Track and Field" are the same sport
     .replace(/\s+/g, " ")
     .trim()
     .toLowerCase();
+  // UMass Amherst's platform titles this sport bare "Hockey" (confirmed via real ingested
+  // data - every other school says "Men's/Women's Ice Hockey") - without this, its games
+  // would sit under a school-specific "hockey" sport name, invisible to the Sport filter's
+  // "Ice Hockey" option and to conferenceOverrides.ts's lookup key. Exact match only, so it
+  // can't misfire on "field hockey".
+  if (normalized === "hockey") return "ice hockey";
+  return normalized;
 }
 
 /**
