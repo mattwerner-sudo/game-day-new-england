@@ -1569,3 +1569,9 @@ games in a way the school's own re-ingest pass didn't revisit). Fixed directly: 
 orphaned `sport='hockey'` team rows (verified zero event references before deleting each). Final
 local state: 83 schools, 2,153 teams, 28,653 events, zero orphaned hockey-sport rows. Not yet
 committed or pushed to Neon as of this entry.
+
+**Closed out**: `normalize.ts` fix committed and pushed (`aafd00e`). Neon migrated/seeded/ingested
+with the full 83-school batch - 83 schools, zero orphaned `sport='hockey'` rows, 24/24 conference
+overrides correct, one harmless transient 504 on a single feed (not chased further). Local and
+Neon now match. Production is data-only affected by this (code was already live) - the deployed
+site reflects the new 83-school data on its next request, no redeploy needed.
