@@ -1674,3 +1674,29 @@ browser render), 12 not yet checked for WAF blocking.
 274/24, Central Connecticut State 378/9, Mitchell College 259/24 inserted/updated). 86 schools,
 2,210 teams, 29,324 events, feed-health clean. Production reflects this on its next request (code
 was already pushed before this data update).
+
+## 30. Session log: 2026-08-11 (continued) — 12 more Presto schools added (86 -> 98)
+
+Checked WAF status on the remaining 12 previously-unchecked Presto schools directly (plain
+`curl -I` on `<domain>/composite?print=ics`) - **all 12 returned real `content-type:
+text/calendar` responses, no WAF blocking at all**. Added all 12 to `src/db/seed/schools.ts`
+with `cmsPlatform: "presto"` (Albertus Magnus, Elms, Lasell, Regis, University of Saint Joseph -
+all GNAC/D3; Mount Holyoke - NEWMAC/D3; Curry, Endicott, Suffolk, Wentworth - Conference of New
+England/D3; Lesley, Vermont State-Johnson - North Atlantic Conference/D3).
+
+**Verified via a full local `ingest.ts --all` run (98 schools): zero errors, 2,640 teams, 42,783
+events, feed-health clean.** All 15 Presto schools (3 from Section 29 + these 12) produced real
+data. Spot-checked Mount Holyoke's notably higher skip rate (699 of 1,995 fetched) before trusting
+it - confirmed same already-established multi-team-meet category (Cross Country invitationals),
+not a new bug. **Committed and pushed** (`e15336b`).
+
+**State as of this entry: Neon migrated + seeded with all 98 schools; a full `ingest.ts --all` is
+running against Neon in the background, not yet confirmed finished.** Given Presto's per-school
+event counts are much larger than SIDEARM's (some schools fetched 2,000+ events in one composite
+feed), expect this to take longer than prior full-batch runs. **Next steps once it completes:**
+(1) check for errors, (2) run `inspect.ts` + `feed-health-report.ts` and confirm they match local
+(98 schools, 2,640 teams, 42,783 events, clean health), (3) no further push needed - the app code
+was already pushed before this Neon data update, so production picks it up automatically on next
+request once Neon's ingest finishes. Remaining gap after this: only the 5 confirmed-WAF-blocked
+Presto schools (Framingham State, Salem State, Westfield State, Mass Maritime, Worcester State) -
+need a real browser render, not started.
