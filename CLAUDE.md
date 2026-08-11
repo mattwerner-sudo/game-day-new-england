@@ -1575,3 +1575,33 @@ with the full 83-school batch - 83 schools, zero orphaned `sport='hockey'` rows,
 overrides correct, one harmless transient 504 on a single feed (not chased further). Local and
 Neon now match. Production is data-only affected by this (code was already live) - the deployed
 site reflects the new 83-school data on its next request, no redeploy needed.
+
+## 28. Session log: 2026-08-11 — feed-health monitoring (#3 from the founder's prioritized list)
+
+New `feed_health` table + `scripts/feed-health-report.ts` (migration `drizzle/0007_next_blindfold.sql`,
+purely additive). Records last-attempted/last-success/last-error and a consecutive-failure streak
+per (school, sport), updated by `recordFeedHealth()` in `src/ingestion/upsert.ts` on every
+`ingest.ts` run. Only surfaces feeds with 2+ consecutive failures - a single blip isn't flagged
+(this session alone hit several transient ones that cleared on retry). Verified both paths
+directly before trusting a full run, then confirmed clean against all 83 schools: 1,723 feeds
+tracked, zero flagged. Applied to Neon (schema only - not worth an extra full ingest run just to
+backfill monitoring data; it'll populate naturally on Neon's next real ingest).
+
+**Also this session: real PrestoSports feed-mechanism research, not yet built into an adapter.**
+Founder supplied real composite-schedule URLs for 8 of the 20 rejected-as-Presto schools. Finding:
+`<composite-url>?print=ics` returns a **single ICS feed per school covering every sport** (422
+events for Bridgewater State alone, full multi-season range) - a real, structured feed with
+`CATEGORIES` (sport, gender-prefixed same convention as SIDEARM), `SUMMARY`, `DTSTART`, `URL`.
+This meaningfully changes the earlier "comparable in scope to the whole SIDEARM adapter" estimate
+from Section 27/prior turns - much more tractable than assumed, likely reusable against the
+existing ICS-parsing code in `parse.ts` with a new SUMMARY-format regex and CATEGORIES-based sport
+extraction, not a rebuild. **Real complication found, not glossed over**: 5 of the 8 schools
+checked (Framingham State, Salem State, Westfield State, Mass Maritime, Worcester State) return
+HTTP 202 with zero body and `x-amzn-waf-action: challenge` headers to a plain fetch - AWS WAF bot
+challenge, not present on the other 3 (Bridgewater State, Central Connecticut State, Mitchell) -
+would need a real browser render for those 5, same category of added complexity as the SIDEARM
+Nuxt-platform schools already solved. Not attempted to bypass - flagged, not solved.
+
+**Not started, deliberately**: an actual PrestoSports adapter (`src/ingestion/presto/` or similar,
+mirroring `src/ingestion/sidearm/`'s structure) - this finding just makes the scope estimate more
+accurate, doesn't build it. Good next-session candidate given how much more tractable it looks now.
