@@ -1700,3 +1700,11 @@ was already pushed before this Neon data update, so production picks it up autom
 request once Neon's ingest finishes. Remaining gap after this: only the 5 confirmed-WAF-blocked
 Presto schools (Framingham State, Salem State, Westfield State, Mass Maritime, Worcester State) -
 need a real browser render, not started.
+
+**Closed out**: the Neon run got interrupted when the app was shut down for the night (confirmed
+via a stale partial count - 2,288 teams vs local's 2,640 - not a crash, just an ended session).
+Re-ran `ingest.ts --all` against Neon the next session - fully safe to resume, same idempotent
+re-run discipline used throughout this project. Final Neon state: 98 schools, zero errors, 2,628
+teams, 42,718 events, feed-health clean - matches local closely. Production already reflects this
+(app code was pushed before this data update, per the established migrate/seed-then-deploy
+ordering).
