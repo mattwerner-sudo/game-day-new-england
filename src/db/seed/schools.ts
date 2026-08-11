@@ -1030,6 +1030,45 @@ export const SCHOOLS_SEED = [
     websiteUrl: "https://vtsuhornets.com",
     cmsPlatform: "sidearm",
   },
+
+  // First 3 of the 20 confirmed-live-PrestoSports schools above (Section 26/27) - the only 3
+  // of 8 checked so far that don't sit behind an AWS WAF bot challenge (Section 29), so the
+  // only 3 realistically ingestable with the new src/ingestion/presto/ adapter right now.
+  // cmsPlatform: "presto", not "sidearm" - this is what routes them through the new adapter
+  // in scripts/ingest.ts.
+  {
+    name: "Bridgewater State University",
+    conference: "MASCAC",
+    division: "D3",
+    city: "Bridgewater",
+    state: "MA",
+    lat: 41.9887,
+    lng: -70.9662,
+    websiteUrl: "https://bsubears.com",
+    cmsPlatform: "presto",
+  },
+  {
+    name: "Central Connecticut State University",
+    conference: "Northeast Conference",
+    division: "D1",
+    city: "New Britain",
+    state: "CT",
+    lat: 41.6942,
+    lng: -72.7623,
+    websiteUrl: "https://ccsubluedevils.com",
+    cmsPlatform: "presto",
+  },
+  {
+    name: "Mitchell College",
+    conference: "GNAC",
+    division: "D3",
+    city: "New London",
+    state: "CT",
+    lat: 41.3556,
+    lng: -72.0995,
+    websiteUrl: "https://mitchellathletics.com",
+    cmsPlatform: "presto",
+  },
 ] as const;
 
 // ================================================================================================

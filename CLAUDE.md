@@ -1605,3 +1605,68 @@ Nuxt-platform schools already solved. Not attempted to bypass - flagged, not sol
 **Not started, deliberately**: an actual PrestoSports adapter (`src/ingestion/presto/` or similar,
 mirroring `src/ingestion/sidearm/`'s structure) - this finding just makes the scope estimate more
 accurate, doesn't build it. Good next-session candidate given how much more tractable it looks now.
+
+## 29. Session log: 2026-08-11 (continued) — PrestoSports adapter built, NOT yet run/tested/committed
+
+**Founder is prioritizing this now.** New `src/ingestion/presto/` module (`feed.ts`, `parse.ts`,
+`normalize.ts`, `ingestSchool.ts`), wired into `scripts/ingest.ts` via a branch on
+`school.cmsPlatform === "presto"`. Reuses `deriveSeason`/`computeDedupeKey`/`sportNameFromTitle`
+from `sidearm/normalize.ts` directly (verified generic, no SIDEARM-specific coupling) and the
+existing `upsertTeam`/`upsertVenue`/`upsertEvent`/`findSchoolByName` from `upsert.ts` (the last one
+extended to also return `city`/`state`, needed for Presto's venue-fallback logic). `tsc --noEmit`
+is clean. **`School` interface in `sidearm/ingestSchool.ts` widened** to include `city`/`state`/
+`cmsPlatform` (always present on real DB rows, the interface was just incomplete before).
+
+**Real findings this was built on, verified against Bridgewater State's actual live feed
+(`bsubears.com/composite?print=ics`), not assumed:**
+- One combined ICS feed per school covers every sport (422 events, full multi-season range) -
+  confirmed via `feed.ts`'s design: no per-sport discovery step needed at all, unlike SIDEARM.
+- `node-ical` correctly computes `.end` from Presto's `DURATION` field (it never uses `DTEND`) -
+  checked directly against real parsed output before relying on it.
+- Sport+gender come from the event's own `CATEGORIES` field (e.g. "Men's Basketball"), not a
+  separate per-sport metadata page the way SIDEARM needs.
+- **Home/away convention is the reverse of SIDEARM's**: "TeamA at TeamB" still means TeamA (self)
+  is away, but "TeamA vs. TeamB" for a real home game lists the OPPONENT first and self SECOND -
+  confirmed against 13 of 14 real "vs" examples from one school's feed.
+- The 1 exception was a genuine neutral-site tournament game, and it was the *only* "vs" example
+  with a real `LOCATION` field present - normal home/away games never carry `LOCATION` at all
+  (venue is implied to be the school's own campus, which is why `ingestSchool.ts` falls back to
+  the participating school's own known city/state rather than a specific building name for those).
+  **Lower-confidence assumption, flagged not hidden**: for neutral-site games, self is assumed
+  listed first (only one real confirmed example exists) - worth re-verifying against more
+  neutral-site games before fully trusting `parsePrestoMatchup`'s neutral-site branch.
+- Presto's `DESCRIPTION` field has no `TV:`/`Streaming Video:`/`Tickets:` structured lines the way
+  SIDEARM's does (confirmed - it's just a plain restatement of the summary) - `ticketUrl`/
+  streaming fields are intentionally left null for Presto-sourced events, not force-parsed.
+- 5 of 8 Presto schools checked (with URLs the founder supplied) sit behind an AWS WAF bot
+  challenge (`x-amzn-waf-action: challenge` header, empty 202 response to a plain fetch) - the
+  other 3 (Bridgewater State, Central Connecticut State, Mitchell) don't. `feed.ts` detects and
+  surfaces this as a clear, distinct error rather than looking like "no games found."
+
+**Tested and verified working against real schools before committing (not just typechecked):**
+seeded the 3 non-WAF-blocked schools (Bridgewater State - MASCAC/D3, Central Connecticut State -
+Northeast Conference/D1, Mitchell College - GNAC/D3) with `cmsPlatform: "presto"`, then ran
+`ingest.ts` against each individually first (per the "verify one school for real before scaling"
+discipline used throughout this project):
+
+| School | Fetched | Inserted | Updated | Skipped |
+|---|---|---|---|---|
+| Bridgewater State | 422 | 274 | 24 | 124 |
+| Central Connecticut State | 508 | 378 | 9 | 121 |
+| Mitchell College | 308 | 259 | 24 | 25 |
+
+Spot-checked real inserted rows directly: home school correctly resolved, venue correctly falls
+back to the school's own city (no specific building name, as designed since Presto's home/away
+games never carry a `LOCATION` field), `sourceUrl` correctly formed from the relative URL +
+hostname. **A real, bounded skip category found and left unforced, not silently swallowed**: dual
+meets in Wrestling and Swimming & Diving sometimes use bare `"(Sport) Opponent Name"` with no
+"at"/"vs" connector at all (e.g. `"(Wrestling) University of Southern Maine"` - confirmed via the
+raw feed this has no `LOCATION` and its `DESCRIPTION` adds no home/away signal either, and its
+`URL` points to a PDF rather than a boxscore page, unlike the parseable "at"/"vs" games) - correctly
+skipped rather than guessed at, same category as genuine multi-team meets/invitationals (which
+account for most of the other skips: Track & Field, Cross Country, Equestrian shows). `tsc --noEmit`
+clean, `feed-health-report.ts` clean (1,726 feeds tracked across all 86 schools, zero flagged).
+
+**Not yet done:** the other 17 of 20 real Presto schools - 5 confirmed WAF-blocked (need a real
+browser render), 12 not yet checked for WAF blocking. Committed and pushed as of this entry;
+Neon not yet migrated/seeded/ingested with the 3 new schools.

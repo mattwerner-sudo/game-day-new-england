@@ -20,6 +20,9 @@ export interface School {
   name: string;
   websiteUrl: string; // e.g. https://athletics.amherst.edu
   division: string;
+  city: string;
+  state: string;
+  cmsPlatform: string; // "sidearm" | "presto" | "other"
 }
 
 function hostnameFromUrl(url: string): string {

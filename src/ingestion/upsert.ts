@@ -11,9 +11,9 @@ import { events, schools, teams, venues, feedHealth } from "../db/schema";
  */
 export async function findSchoolByName(
   name: string
-): Promise<{ id: string; name: string } | null> {
+): Promise<{ id: string; name: string; city: string; state: string } | null> {
   const rows = await db
-    .select({ id: schools.id, name: schools.name })
+    .select({ id: schools.id, name: schools.name, city: schools.city, state: schools.state })
     .from(schools)
     .where(ilike(schools.name, `%${name}%`))
     .limit(1);
