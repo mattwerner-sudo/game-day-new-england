@@ -5,6 +5,7 @@ import {
   timestamp,
   boolean,
   doublePrecision,
+  integer,
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
@@ -137,6 +138,30 @@ export const consentEvents = pgTable("consent_events", {
   schoolIds: uuid("school_ids").array(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
+
+// Per (school, sport) ingestion history - the thing that lets a human glance at what's
+// actually broken instead of re-reading raw ingest.ts console output after every run.
+// Ingestion is human-triggered, not cron'd (CLAUDE.md Section 0.3), so this doesn't detect
+// breakage in real time - it's what makes accumulated breakage visible the next time
+// someone does run it, rather than invisible indefinitely. See scripts/feed-health-report.ts.
+export const feedHealth = pgTable(
+  "feed_health",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    schoolId: uuid("school_id")
+      .notNull()
+      .references(() => schools.id, { onDelete: "cascade" }),
+    sportSlug: text("sport_slug").notNull(),
+    lastAttemptedAt: timestamp("last_attempted_at", { withTimezone: true }).notNull(),
+    lastSuccessAt: timestamp("last_success_at", { withTimezone: true }),
+    lastError: text("last_error"),
+    // Resets to 0 on any success; increments on each consecutive failed attempt. A single
+    // transient blip (this session saw plenty - 504s, dropped connections) isn't worth
+    // surfacing; a feed still broken after several real runs is.
+    consecutiveFailures: integer("consecutive_failures").notNull().default(0),
+  },
+  (table) => [uniqueIndex("feed_health_school_sport_idx").on(table.schoolId, table.sportSlug)]
+);
 
 // Dedup guard so scripts/send-alerts.ts is safe to re-run without double-emailing a game.
 export const fanAlertLog = pgTable(

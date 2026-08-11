@@ -1,6 +1,6 @@
-import { and, eq, ilike, isNull } from "drizzle-orm";
+import { and, eq, ilike, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client";
-import { events, schools, teams, venues } from "../db/schema";
+import { events, schools, teams, venues, feedHealth } from "../db/schema";
 
 /**
  * Fuzzy-matches an opponent name parsed from one school's feed against our seeded
@@ -105,6 +105,54 @@ export interface EventUpsertInput {
   streamingVideoUrl?: string | null;
   radioNetwork?: string | null;
   streamingAudioUrl?: string | null;
+}
+
+/**
+ * Records one ingest attempt for a (school, sport) pair - success resets the failure
+ * streak, failure increments it. Called for every sport on every ingest run (not just
+ * failures), since a feed that's fine needs its lastSuccessAt refreshed too, otherwise a
+ * long-untouched-but-healthy feed would look identical to a truly stale one in a report.
+ */
+export async function recordFeedHealth(
+  schoolId: string,
+  sportSlug: string,
+  result: { success: true } | { success: false; error: string }
+): Promise<void> {
+  const now = new Date();
+  if (result.success) {
+    await db
+      .insert(feedHealth)
+      .values({
+        schoolId,
+        sportSlug,
+        lastAttemptedAt: now,
+        lastSuccessAt: now,
+        lastError: null,
+        consecutiveFailures: 0,
+      })
+      .onConflictDoUpdate({
+        target: [feedHealth.schoolId, feedHealth.sportSlug],
+        set: { lastAttemptedAt: now, lastSuccessAt: now, lastError: null, consecutiveFailures: 0 },
+      });
+  } else {
+    await db
+      .insert(feedHealth)
+      .values({
+        schoolId,
+        sportSlug,
+        lastAttemptedAt: now,
+        lastError: result.error,
+        consecutiveFailures: 1,
+      })
+      .onConflictDoUpdate({
+        target: [feedHealth.schoolId, feedHealth.sportSlug],
+        set: {
+          lastAttemptedAt: now,
+          lastError: result.error,
+          consecutiveFailures: sql`${feedHealth.consecutiveFailures} + 1`,
+        },
+      });
+  }
 }
 
 export async function upsertEvent(data: EventUpsertInput): Promise<"inserted" | "updated"> {

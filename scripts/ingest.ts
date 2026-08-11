@@ -2,6 +2,7 @@ import { ilike } from "drizzle-orm";
 import { db } from "../src/db/client";
 import { schools } from "../src/db/schema";
 import { discoverSportSlugs, ingestSchoolSport, School } from "../src/ingestion/sidearm/ingestSchool";
+import { recordFeedHealth } from "../src/ingestion/upsert";
 
 async function loadSchool(nameFragment: string): Promise<School> {
   const rows = await db
@@ -38,8 +39,11 @@ async function ingestOneSchool(school: School, sportSlugs?: string[]) {
         `  ${slug.padEnd(28)} "${result.sportTitle}" — fetched ${result.fetched}, ` +
           `inserted ${result.inserted}, updated ${result.updated}, skipped ${result.skipped}`
       );
+      await recordFeedHealth(school.id, slug, { success: true });
     } catch (err) {
-      console.error(`  [error] ${slug}: ${(err as Error).message}`);
+      const message = (err as Error).message;
+      console.error(`  [error] ${slug}: ${message}`);
+      await recordFeedHealth(school.id, slug, { success: false, error: message });
     }
   }
 }
