@@ -1668,5 +1668,9 @@ account for most of the other skips: Track & Field, Cross Country, Equestrian sh
 clean, `feed-health-report.ts` clean (1,726 feeds tracked across all 86 schools, zero flagged).
 
 **Not yet done:** the other 17 of 20 real Presto schools - 5 confirmed WAF-blocked (need a real
-browser render), 12 not yet checked for WAF blocking. Committed and pushed as of this entry;
-Neon not yet migrated/seeded/ingested with the 3 new schools.
+browser render), 12 not yet checked for WAF blocking.
+
+**Closed out**: seeded and ingested on Neon too, results matched local exactly (Bridgewater State
+274/24, Central Connecticut State 378/9, Mitchell College 259/24 inserted/updated). 86 schools,
+2,210 teams, 29,324 events, feed-health clean. Production reflects this on its next request (code
+was already pushed before this data update).
