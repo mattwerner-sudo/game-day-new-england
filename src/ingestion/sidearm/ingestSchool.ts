@@ -7,13 +7,17 @@ import {
   deriveSeason,
   parseLocation,
   parseMatchup,
+  parseSpecialEventName,
+  looksLikeMeetName,
+  isOutOfScopeSport,
   computeDedupeKey,
+  computeSpecialEventDedupeKey,
   parseTicketUrl,
   parseStreamingInfo,
   isFeedStale,
 } from "./normalize";
 import { getTeamOverride } from "./conferenceOverrides";
-import { findSchoolByName, upsertTeam, upsertVenue, upsertEvent } from "../upsert";
+import { findSchoolByName, upsertTeam, upsertVenue, upsertEvent, upsertSpecialEvent } from "../upsert";
 
 export interface School {
   id: string;
@@ -36,6 +40,7 @@ export interface IngestResult {
   inserted: number;
   updated: number;
   skipped: number;
+  meets: number;
 }
 
 /** Fetch + parse + normalize + dedupe + upsert one sport's real schedule for one school. */
@@ -44,7 +49,12 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
   const meta = await fetchSportMeta(hostname, sportSlug);
   if (!meta) {
     console.warn(`  [skip] no associated_sport metadata found for ${hostname}/${sportSlug}`);
-    return { sportSlug, sportTitle: "(unknown)", fetched: 0, inserted: 0, updated: 0, skipped: 0 };
+    return { sportSlug, sportTitle: "(unknown)", fetched: 0, inserted: 0, updated: 0, skipped: 0, meets: 0 };
+  }
+
+  if (isOutOfScopeSport(meta.title)) {
+    console.warn(`  [skip] "${meta.title}" (${hostname}/${sportSlug}) - club/JV/esports, out of scope (Section 3)`);
+    return { sportSlug, sportTitle: meta.title, fetched: 0, inserted: 0, updated: 0, skipped: 0, meets: 0 };
   }
 
   const icsText = await fetchIcsFeed(hostname, meta.sportId);
@@ -60,7 +70,7 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
         `${mostRecentStart?.toISOString() ?? "(none)"}, likely a defunct/renamed program page ` +
         `still linked in site nav, not a real active sport`
     );
-    return { sportSlug, sportTitle: meta.title, fetched: rawGames.length, inserted: 0, updated: 0, skipped: rawGames.length };
+    return { sportSlug, sportTitle: meta.title, fetched: rawGames.length, inserted: 0, updated: 0, skipped: rawGames.length, meets: 0 };
   }
 
   const sport = sportNameFromTitle(meta.title);
@@ -71,17 +81,78 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
+  let meets = 0;
+
+  /** Shared by both meet-detection paths below - see their respective comments. */
+  async function upsertMeet(eventName: string, game: (typeof rawGames)[number]): Promise<void> {
+    const { venueName, city, state } = parseLocation(game.location);
+    const venueId = await upsertVenue(venueName, null, city, state);
+    const dedupeKey = computeSpecialEventDedupeKey({ startDatetime: game.start, sport, gender, eventName });
+
+    const result = await upsertSpecialEvent({
+      sport,
+      gender,
+      season: deriveSeason(sport, game.start),
+      division: null,
+      eventName,
+      venueId,
+      participatingSchoolId: school.id,
+      startDatetime: game.start,
+      endDatetime: game.end,
+      status: "scheduled",
+      source: "sidearm",
+      sourceEventId: game.uid,
+      dedupeKey,
+    });
+
+    if (result === "inserted") inserted++;
+    else updated++;
+    meets++;
+  }
 
   for (const game of rawGames) {
-    const matchup = parseMatchup(game.summary);
+    let matchup = parseMatchup(game.summary);
+
     if (!matchup) {
-      skipped++;
-      console.warn(`  [skip] couldn't parse matchup from summary: "${game.summary}"`);
-      continue;
+      const candidateName = parseSpecialEventName(game.summary, school.name, meta.title);
+      if (!candidateName) {
+        skipped++;
+        console.warn(`  [skip] couldn't parse matchup from summary: "${game.summary}"`);
+        continue;
+      }
+
+      // A third real SIDEARM summary format, found via a real misclassification (Saint
+      // Joseph's College of Maine): "<School> <Sport>  <Opponent>" with no "vs"/"at"
+      // connector word at all - confirmed real: "Saint Joseph's College of Maine Men's
+      // Golf  Gordon College", where "Gordon College" is a real seeded opponent school, not
+      // a meet name. Only treat the prefix-stripped remainder as a genuine meet name once
+      // it's confirmed NOT to resolve to a real school - otherwise this is a real 2-team
+      // game that just happens to lack the usual grammar. No "vs"/"at" word means no
+      // grammatical signal for home/away either, so that's inferred from location instead:
+      // a location that doesn't match this school's own city is a real signal this is away.
+      const resolvedAsSchool = await findSchoolByName(candidateName);
+      if (!resolvedAsSchool) {
+        await upsertMeet(candidateName, game);
+        continue;
+      }
+      const loc = parseLocation(game.location);
+      const isHome = !loc.city || (loc.city === school.city && loc.state === school.state);
+      matchup = { isHome, opponentName: candidateName };
     }
 
     const { venueName, city, state } = parseLocation(game.location);
     const opponent = await findSchoolByName(matchup.opponentName);
+
+    // Second meet-detection path (see looksLikeMeetName's comment): some schools' feeds
+    // (Williams' cross country, confirmed real) run meets through the same vs/at shape a
+    // real game uses, e.g. "... at Little Three Championships". Only reclassify when the
+    // "opponent" both fails to resolve to a real seeded school AND matches a real-world
+    // meet/tournament keyword - a genuine opponent name essentially never does.
+    if (!opponent && looksLikeMeetName(matchup.opponentName)) {
+      await upsertMeet(matchup.opponentName, game);
+      continue;
+    }
+
     // Use the opponent's own canonical name (from our schools table) when resolved,
     // not the raw text this feed happened to call them - the two sides of the same
     // real game often name each other differently ("Amherst College" vs "Amherst"),
@@ -103,6 +174,7 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
       startDatetime: game.start,
       homeName,
       awayName,
+      gender,
     });
 
     // Ticket/source links are only trustworthy from the feed that's actually hosting
@@ -136,6 +208,7 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
       source: "sidearm",
       sourceEventId: game.uid,
       dedupeKey,
+      opponentNameRaw: opponent ? null : opponentName,
       ...linkFields,
     });
 
@@ -143,7 +216,7 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
     else updated++;
   }
 
-  return { sportSlug, sportTitle: meta.title, fetched: rawGames.length, inserted, updated, skipped };
+  return { sportSlug, sportTitle: meta.title, fetched: rawGames.length, inserted, updated, skipped, meets };
 }
 
 export { discoverSportSlugs } from "./discover";

@@ -9,6 +9,9 @@ export interface Fan {
   manageToken: string;
   confirmedAt: Date | null;
   unsubscribedAt: Date | null;
+  phone: string | null;
+  smsConsentedAt: Date | null;
+  smsUnsubscribedAt: Date | null;
 }
 
 /** Same insert -> onConflictDoNothing -> select-if-not-returned idiom as upsertTeam. */
@@ -52,7 +55,7 @@ export async function getFollowedSchools(
 
 export async function logConsentEvent(
   fanId: string,
-  action: "registered" | "confirmed" | "unsubscribed",
+  action: "registered" | "confirmed" | "unsubscribed" | "sms_registered" | "sms_unsubscribed",
   schoolIds: string[]
 ): Promise<void> {
   await db.insert(consentEvents).values({ fanId, action, schoolIds });
@@ -75,4 +78,28 @@ export async function unsubscribeFan(fanId: string): Promise<void> {
     .update(fans)
     .set({ unsubscribedAt: new Date() })
     .where(eq(fans.id, fanId));
+}
+
+/**
+ * Unlike email, there's no separate click-to-confirm step - checking the SMS box on /follow
+ * and submitting the form *is* the required "prior express written consent" (TCPA), so this
+ * unconditionally (re)sets phone + smsConsentedAt and clears smsUnsubscribedAt every time it's
+ * called. A fan resubmitting with a new number, or re-opting-in after a STOP, both go through
+ * this same real, explicit action - correct either way, not a shortcut.
+ */
+export async function setSmsConsent(fanId: string, phone: string): Promise<void> {
+  await db
+    .update(fans)
+    .set({ phone, smsConsentedAt: new Date(), smsUnsubscribedAt: null })
+    .where(eq(fans.id, fanId));
+}
+
+export async function unsubscribeFromSms(fanId: string): Promise<void> {
+  await db.update(fans).set({ smsUnsubscribedAt: new Date() }).where(eq(fans.id, fanId));
+}
+
+/** For the inbound Twilio webhook's STOP-keyword handling - looked up by phone, not token. */
+export async function findFanByPhone(phone: string): Promise<Fan | null> {
+  const rows = await db.select().from(fans).where(eq(fans.phone, phone)).limit(1);
+  return rows[0] ?? null;
 }

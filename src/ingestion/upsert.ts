@@ -1,6 +1,7 @@
 import { and, eq, ilike, isNull, sql } from "drizzle-orm";
 import { db } from "../db/client";
 import { events, schools, teams, venues, feedHealth } from "../db/schema";
+import { SCHOOL_NAME_ALIASES } from "./schoolAliases";
 
 /**
  * Fuzzy-matches an opponent name parsed from one school's feed against our seeded
@@ -8,14 +9,32 @@ import { events, schools, teams, venues, feedHealth } from "../db/schema";
  * of the same real game often name each other differently ("Amherst College" from
  * Amherst's own feed vs. just "Amherst" from Bowdoin's) which otherwise produces two
  * different dedupe keys for one real game.
+ *
+ * Checks the known-ambiguous-alias table first (see schoolAliases.ts) - a plain substring
+ * match alone can silently pick the wrong school when more than one seeded school's name
+ * contains the same short form (confirmed real: "Rhode Island" matching both "Rhode Island
+ * College" and "University of Rhode Island", with no ORDER BY to make the pick deterministic
+ * let alone correct). The substring fallback below now orders by name for at least
+ * reproducible behavior on any other, not-yet-discovered collision.
  */
 export async function findSchoolByName(
   name: string
 ): Promise<{ id: string; name: string; city: string; state: string } | null> {
+  const alias = SCHOOL_NAME_ALIASES[name.trim().toLowerCase()];
+  if (alias) {
+    const aliasRows = await db
+      .select({ id: schools.id, name: schools.name, city: schools.city, state: schools.state })
+      .from(schools)
+      .where(eq(schools.name, alias))
+      .limit(1);
+    if (aliasRows[0]) return aliasRows[0];
+  }
+
   const rows = await db
     .select({ id: schools.id, name: schools.name, city: schools.city, state: schools.state })
     .from(schools)
     .where(ilike(schools.name, `%${name}%`))
+    .orderBy(schools.name)
     .limit(1);
   return rows[0] ?? null;
 }
@@ -105,6 +124,7 @@ export interface EventUpsertInput {
   streamingVideoUrl?: string | null;
   radioNetwork?: string | null;
   streamingAudioUrl?: string | null;
+  opponentNameRaw?: string | null;
 }
 
 /**
@@ -171,5 +191,84 @@ export async function upsertEvent(data: EventUpsertInput): Promise<"inserted" | 
   }
 
   await db.insert(events).values(data);
+  return "inserted";
+}
+
+export interface SpecialEventUpsertInput {
+  sport: string;
+  gender: string;
+  season: string;
+  division: string | null;
+  eventName: string;
+  venueId: string | null;
+  participatingSchoolId: string;
+  startDatetime: Date;
+  endDatetime: Date | null;
+  status: string;
+  source: string;
+  sourceEventId: string;
+  dedupeKey: string;
+}
+
+/**
+ * Multi-team meets (cross country, track & field, invitationals, tournaments) show up once
+ * per participating school's own feed, each pass only knowing about itself - unlike a 2-team
+ * game's dedupeKey (home+away), a meet's dedupeKey can't include the school list (see
+ * computeSpecialEventDedupeKey), so participatingSchoolIds has to be *merged* across passes
+ * rather than overwritten like upsertEvent()'s other fields. Whichever pass runs first "wins"
+ * for the shared fields (venue, division, etc.) - acceptable since those should be the same
+ * real meet regardless of which participating school's feed is read first.
+ */
+export async function upsertSpecialEvent(data: SpecialEventUpsertInput): Promise<"inserted" | "updated"> {
+  const existing = await db
+    .select({ id: events.id, participatingSchoolIds: events.participatingSchoolIds })
+    .from(events)
+    .where(eq(events.dedupeKey, data.dedupeKey))
+    .limit(1);
+
+  if (existing[0]) {
+    const merged = Array.from(
+      new Set([...(existing[0].participatingSchoolIds ?? []), data.participatingSchoolId])
+    );
+    await db
+      .update(events)
+      .set({
+        type: "special_event",
+        sport: data.sport,
+        gender: data.gender,
+        season: data.season,
+        division: data.division,
+        eventName: data.eventName,
+        venueId: data.venueId,
+        participatingSchoolIds: merged,
+        startDatetime: data.startDatetime,
+        endDatetime: data.endDatetime,
+        status: data.status,
+        source: data.source,
+        sourceEventId: data.sourceEventId,
+        updatedAt: new Date(),
+      })
+      .where(eq(events.dedupeKey, data.dedupeKey));
+    return "updated";
+  }
+
+  await db.insert(events).values({
+    type: "special_event",
+    sport: data.sport,
+    gender: data.gender,
+    season: data.season,
+    division: data.division,
+    eventName: data.eventName,
+    homeTeamId: null,
+    awayTeamId: null,
+    participatingSchoolIds: [data.participatingSchoolId],
+    venueId: data.venueId,
+    startDatetime: data.startDatetime,
+    endDatetime: data.endDatetime,
+    status: data.status,
+    source: data.source,
+    sourceEventId: data.sourceEventId,
+    dedupeKey: data.dedupeKey,
+  });
   return "inserted";
 }

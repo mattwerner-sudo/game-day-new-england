@@ -1,4 +1,4 @@
-import { sportNameFromTitle } from "../sidearm/normalize";
+import { sportNameFromTitle, normalizeState } from "../sidearm/normalize";
 
 /** "Women's Basketball" -> "womens", "Men's Ice Hockey" -> "mens", "Football" -> "coed" */
 export function genderFromCategory(category: string): "mens" | "womens" | "coed" {
@@ -56,6 +56,49 @@ export function parsePrestoMatchup(summary: string, hasLocation: boolean): Parse
   }
 
   return null; // multi-team meets/invitationals etc. - same log-and-skip handling as SIDEARM
+}
+
+export interface ParsedPrestoSpecialEvent {
+  eventName: string;
+  hostSchoolName: string | null;
+  venueName: string | null;
+  city: string | null;
+  state: string | null;
+}
+
+/**
+ * Presto meet/invitational/championship events (parsePrestoMatchup returns null for these -
+ * no "vs"/"at" pattern) carry NO LOCATION field at all in the raw ICS (confirmed against a
+ * real feed, Bridgewater State's - unlike SIDEARM, which does populate LOCATION for meets).
+ * Venue and host-school info are instead baked directly into the SUMMARY text, in two
+ * optional trailing patterns confirmed against real events from that same feed:
+ *   "(Women's Cross Country) MASCAC Championships hosted by Worcester State University
+ *    (Fort Devens Course - Devens, Mass.)"
+ *   "(Women's Cross Country) Suffolk Short Course Classic (Mark Coogan Cross Country
+ *    Course - Attleboro, Mass.)"
+ * i.e. an optional bare "hosted by <School>" clause, and an optional trailing
+ * "(Venue - City, State)" parenthetical. Either or both can be absent (e.g. a bare
+ * "NCAA Division III Championships" with neither) - this degrades gracefully to just the
+ * event name in that case rather than forcing a guess.
+ */
+export function parsePrestoSpecialEventInfo(summary: string): ParsedPrestoSpecialEvent {
+  const withoutSportPrefix = summary.replace(/^\([^)]+\)\s*/, "").trim();
+
+  const venueMatch = withoutSportPrefix.match(/\s*\(([^()]+?)\s*-\s*([^,()]+),\s*([^()]+)\)\s*$/);
+  const withoutVenue = venueMatch
+    ? withoutSportPrefix.slice(0, venueMatch.index).trim()
+    : withoutSportPrefix;
+
+  const hostMatch = withoutVenue.match(/\s+hosted by\s+(.+)$/i);
+  const eventName = (hostMatch ? withoutVenue.slice(0, hostMatch.index) : withoutVenue).trim();
+
+  return {
+    eventName,
+    hostSchoolName: hostMatch ? hostMatch[1].trim() : null,
+    venueName: venueMatch ? venueMatch[1].trim() : null,
+    city: venueMatch ? venueMatch[2].trim() : null,
+    state: venueMatch ? normalizeState(venueMatch[3].trim()) : null,
+  };
 }
 
 export interface ParsedPrestoLocation {

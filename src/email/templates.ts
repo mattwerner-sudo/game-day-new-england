@@ -31,7 +31,12 @@ export function digestEmail(
 ): { subject: string; html: string } {
   const rows = events
     .map((e) => {
-      const matchup = `${e.awaySchoolName ?? "TBD"} at ${e.homeSchoolName ?? "TBD"}`;
+      // special_event rows (meets/championships) have no home/away side - fall back to
+      // eventName + whichever participating schools we know about, same as the homepage.
+      const matchup =
+        e.type === "special_event"
+          ? `${e.eventName ?? "Meet"} (${e.participatingSchoolNames.join(", ") || "schools TBD"})`
+          : `${e.awaySchoolName ?? "TBD"} at ${e.homeSchoolName ?? "TBD"}`;
       const when = e.startDatetime.toLocaleString("en-US", {
         weekday: "short",
         month: "short",

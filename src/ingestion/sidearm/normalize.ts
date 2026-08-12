@@ -10,10 +10,31 @@ export function genderFromCode(code: string): "mens" | "womens" | "coed" {
   return "coed";
 }
 
+/**
+ * Sports listings this project explicitly doesn't cover ([Section 3](../../../CLAUDE.md) -
+ * "Not covering club or intramural sports - varsity only"). Confirmed via real data that
+ * these ride along in the same SIDEARM/Presto feeds as real varsity teams and are genuinely
+ * separate programs, not just naming variants of a varsity team - e.g. Brown University has
+ * both a real "baseball/mens" varsity team AND a wholly separate "necba baseball/coed" team
+ * in the same feed. Checked against the *raw* title/category (before sportNameFromTitle's
+ * normalization), so callers should check this before treating a title as a real sport.
+ * Esports game titles are enumerated from real observed feed data (League of Legends,
+ * Valorant, Overwatch, Super Smash Bros, Marvel Rivals) - not exhaustive, may need extending
+ * if a school's feed surfaces a different game later.
+ */
+const OUT_OF_SCOPE_SPORT_PATTERN =
+  /\b(club|jv|junior varsity|necba|esports|e-sports|league of legends|valorant|overwatch|super smash bros|smash bros|marvel rivals)\b/i;
+
+export function isOutOfScopeSport(title: string): boolean {
+  return OUT_OF_SCOPE_SPORT_PATTERN.test(title);
+}
+
 /** "Women's Soccer" -> "soccer", "Football" -> "football", "Field Hockey" -> "field hockey" */
 export function sportNameFromTitle(title: string): string {
   const normalized = title
+    .replace(/^#\d+\s+/, "") // AP/coaches-poll ranking prefix, e.g. "#12 Men's Tennis"
     .replace(/^(men'?s|women'?s)\s+/i, "")
+    .replace(/^[mw]-/i, "") // abbreviated gender prefix some SIDEARM sites use, e.g. "M-Basketball"
     .replace(/\s*&\s*/g, " and ") // "Track & Field" and "Track and Field" are the same sport
     .replace(/\s+/g, " ")
     .trim()
@@ -24,6 +45,48 @@ export function sportNameFromTitle(title: string): string {
   // "Ice Hockey" option and to conferenceOverrides.ts's lookup key. Exact match only, so it
   // can't misfire on "field hockey".
   if (normalized === "hockey") return "ice hockey";
+  // Real naming variants/typos confirmed via live feed data, all describing the same real
+  // sport as a differently-phrased or misspelled title - collapsed to one canonical name so
+  // the Sport filter doesn't show near-duplicates for the same real program.
+  if (normalized === "swiming and diving") return "swimming and diving";
+  if (normalized === "indoor track") return "indoor track and field";
+  if (normalized === "outdoor track") return "outdoor track and field";
+  // Bare "track and field" with a parenthetical qualifier ("(indoor and outdoor)",
+  // "(sprints, hurdles, jumps)") doesn't add real distinguishing info beyond the plain
+  // "track and field" bucket - strip it rather than let every school's own phrasing become
+  // its own filter entry. Genuine "indoor track and field"/"outdoor track and field" titles
+  // (no parenthetical) are untouched - that split is real and intentional (see sports.ts).
+  if (/^track and field\s*\(/.test(normalized)) return "track and field";
+  if (normalized === "cross country, distance track") return "cross country";
+  // Confirmed via real data (UMass Lowell) this rides alongside separately-listed "cross
+  // country" and "track and field" teams for the same school/gender - a redundant combined
+  // feed, not a genuinely distinct third program. Folds into "cross country" so
+  // upsertTeam's (school, sport, gender) key naturally merges it with the real team instead
+  // of creating a spurious fourth entry.
+  if (normalized === "cross country/track and field") return "cross country";
+  if (normalized === "coed sailing") return "sailing";
+  if (normalized.startsWith("sailing - ")) return "sailing";
+  if (normalized === "equestrian ida" || normalized === "equestrian ihsa") return "equestrian";
+  if (normalized === "cheerleading") return "cheer";
+  if (normalized === "dance team") return "dance";
+  if (normalized === "ultimate") return "ultimate frisbee";
+  // Heavyweight/lightweight are real, meaningful NCAA rowing distinctions (separate
+  // competitive circuits), not fluff to collapse away - only the "crew" vs "rowing" naming
+  // and prefix-vs-parenthetical phrasing are normalized here, the weight-class split itself
+  // is preserved.
+  if (normalized === "heavyweight crew" || normalized === "crew (heavyweight)") return "heavyweight rowing";
+  if (normalized === "lightweight crew" || normalized === "crew (lightweight)") return "lightweight rowing";
+  if (normalized === "openweight crew" || normalized === "crew") return "rowing";
+  // Found on old Presto historical events (2016-2022, see PRESTO_HISTORY_CUTOFF_DAYS) while
+  // investigating the sport-listing cleanup - real garbled/variant CATEGORIES values from
+  // Presto's own feed, not a parsing bug on this end. "Cross Countrys Country" and "Golf
+  // Schedule" look like source-side data-entry mistakes (the latter reads like a page title
+  // that leaked into the category field); "M/W Cross Country", "Riding", and bare "Track"
+  // are real if uncommon phrasings for legitimate programs.
+  if (normalized === "cross countrys country" || normalized === "m/w cross country") return "cross country";
+  if (normalized === "golf schedule") return "golf";
+  if (normalized === "riding") return "equestrian";
+  if (normalized === "track") return "track and field";
   return normalized;
 }
 
@@ -121,7 +184,7 @@ const STATE_ALIASES: Record<string, string> = {
   wyoming: "WY", wyo: "WY", wy: "WY",
 };
 
-function normalizeState(raw: string): string {
+export function normalizeState(raw: string): string {
   const cleaned = raw.replace(/\./g, " ").replace(/\s+/g, " ").trim().toLowerCase();
   return STATE_ALIASES[cleaned] ?? raw.replace(/\./g, "").trim().toUpperCase();
 }
@@ -270,6 +333,59 @@ export function parseMatchup(summary: string): ParsedMatchup | null {
   };
 }
 
+// Meet-based sports (track & field, cross country, golf, tennis, swimming, rowing) also
+// publish their multi-team meets through the SAME "<School> <Sport> vs/at <Name>" shape a
+// real 2-team game uses (confirmed via a real feed, Williams' cross country: "Williams
+// College Men's Cross Country at Little Three Championships", "...vs Purple Valley
+// Classic") - a different convention than Amherst's own feed (which never runs meets through
+// parseMatchup at all - see parseSpecialEventName). Without this check, parseMatchup()
+// happily returns a "successful" match with "Little Three Championships" treated as a
+// literal opponent school name - confirmed via a real query against this project's own
+// database that this has been silently happening across the ENTIRE 98-school dataset for
+// as long as ingestion has run (~4,100 of ~42,800 existing event rows, spanning cross
+// country, track, golf, tennis, swimming, rowing - not just Williams or just one sport).
+// The gate below only reclassifies when BOTH signals agree: the name failed to resolve to
+// any real seeded school AND it contains a real-world meet/tournament keyword - a genuine
+// opponent name essentially never contains these words, while every confirmed real meet name
+// in this data does.
+const MEET_NAME_PATTERN =
+  /\b(championships?|invitational|classic|regionals?|nationals?|open|relays?|tournament|qualifiers?|multis?|round.?robin|festival|shootout|meet|challenge)\b/i;
+
+export function looksLikeMeetName(name: string): boolean {
+  return MEET_NAME_PATTERN.test(name);
+}
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * SIDEARM meets (cross country, track & field, invitationals, tournaments with 3+ teams)
+ * don't fit the "<School> <Sport> vs/at <Opponent>" shape parseMatchup() expects - confirmed
+ * via a real feed (Amherst's cross country/track & field): "[N] Amherst College Men's Cross
+ * Country  Little Three Championships" (school+sport exactly as it appears elsewhere in this
+ * same feed, then the actual meet name - note the real double space before it). The leading
+ * "[N]" is confirmed to be a literal, un-templated placeholder string on some entries (not a
+ * numeric id as it first appeared) - other entries for the very same sport have no bracket at
+ * all. Strip whatever bracket token (if any) is present rather than assume digits, so both
+ * forms normalize the same way. Strip the known prefix rather than guess at the remainder
+ * generically, so a summary that doesn't match the expected shape falls through to null
+ * (still logged and skipped by the caller) instead of a low-confidence guess getting treated
+ * as a meet name.
+ */
+export function parseSpecialEventName(
+  summary: string,
+  schoolName: string,
+  sportTitle: string
+): string | null {
+  const withoutIndex = summary.replace(/^\[[^\]]*\]\s*/, "");
+  const prefixPattern = new RegExp(`^${escapeRegex(schoolName)}\\s+${escapeRegex(sportTitle)}\\s+`, "i");
+  const match = withoutIndex.match(prefixPattern);
+  if (!match) return null;
+  const eventName = withoutIndex.slice(match[0].length).trim();
+  return eventName || null;
+}
+
 /** Collapse whitespace/case so both sides of a matchup produce the same dedupe key. */
 export function normalizeForKey(value: string): string {
   return value
@@ -284,16 +400,65 @@ export function normalizeForKey(value: string): string {
  * differently by the two schools' own feeds (the home school's feed names the exact
  * building; the away school's feed often only has "City, ST"). Keying on venue too
  * would defeat the whole point of deduping - two schools' feeds would never collapse
- * into one row. Date + home + away is the actual unique identity of a game.
+ * into one row. Date + home + away + gender is the actual unique identity of a game.
+ *
+ * gender is included for exactly the same reason computeSpecialEventDedupeKey() includes
+ * it (see that function's comment) - found via a real, serious bug this session: dual-meet
+ * sports (swimming and diving, indoor/outdoor track, tennis) very commonly play the men's and
+ * women's meet against the same opponent on the same date. Without gender in the key, both
+ * genders' real games produced the IDENTICAL dedupe key and silently overwrote each other on
+ * every ingest pass - confirmed directly via a real case (Bridgewater State vs. Bentley
+ * University swimming, both men's and women's on 2027-01-27): the women's game was correctly
+ * upserted, then immediately clobbered by the men's game processed later in the same run,
+ * leaving only one gender's data behind with no error or warning. This was present since this
+ * dedupe key was first written (Day 1) and had nothing to do with the special_event or
+ * third-summary-format work that surfaced it - those investigations just happened to produce
+ * a same-day same-opponent dual meet as a test case, which is what exposed it.
  */
 export function computeDedupeKey(params: {
   startDatetime: Date;
   homeName: string;
   awayName: string;
+  gender: string;
 }): string {
   return [
     params.startDatetime.toISOString(),
     normalizeForKey(params.homeName),
     normalizeForKey(params.awayName),
+    params.gender,
+  ].join("|");
+}
+
+/**
+ * Same venue-exclusion reasoning as computeDedupeKey() above, plus participatingSchoolIds is
+ * deliberately excluded too - it's meant to *accumulate* as each participating school's own
+ * feed gets ingested (see upsertSpecialEvent), so it can't be part of the identity a later
+ * pass has to match against. Uses the calendar date only (not exact time) since different
+ * schools' feeds sometimes list slightly different start times for the same real meet.
+ *
+ * gender IS part of the key, unlike the game dedupe key's home/away pair - confirmed via real
+ * data (Amherst's own feed) that men's and women's races at the same meet share the exact same
+ * event name and date ("Little Three Championships" runs both the same day), but are two
+ * separate real events with different participants. sportNameFromTitle() also collapses
+ * "Men's Cross Country"/"Women's Cross Country" to the same "cross country" sport string, so
+ * without gender in the key the two races would incorrectly collapse into one row, with
+ * whichever gender's feed happened to be ingested second silently overwriting the first.
+ *
+ * Known limitation: if two schools' feeds spell/format the same meet's name differently, this
+ * won't collapse them into one row - accepted as a real gap (each shows up as its own row)
+ * rather than risk merging two genuinely different events on a fuzzy match.
+ */
+export function computeSpecialEventDedupeKey(params: {
+  startDatetime: Date;
+  sport: string;
+  gender: string;
+  eventName: string;
+}): string {
+  return [
+    "special",
+    params.startDatetime.toISOString().slice(0, 10),
+    normalizeForKey(params.sport),
+    params.gender,
+    normalizeForKey(params.eventName),
   ].join("|");
 }

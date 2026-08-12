@@ -56,6 +56,35 @@ export default async function FollowPage() {
             </p>
           </div>
 
+          <div className="rounded-lg border border-zinc-200 p-3 dark:border-zinc-800">
+            <label htmlFor="phone" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Phone (optional, for text alerts)
+            </label>
+            <input
+              id="phone"
+              name="phone"
+              type="tel"
+              placeholder="(555) 555-5555"
+              autoComplete="tel"
+              className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+            />
+            <div className="mt-3 flex items-start gap-2">
+              <input
+                id="smsConsent"
+                name="smsConsent"
+                type="checkbox"
+                value="yes"
+                className="mt-0.5"
+              />
+              <label htmlFor="smsConsent" className="text-xs text-zinc-600 dark:text-zinc-400">
+                Also text me game reminders. By checking this box, I agree to receive automated
+                text messages from Game Day New England about my followed schools&apos; games.
+                Message frequency varies. Msg &amp; data rates may apply. Reply STOP to cancel,
+                HELP for help. Consent isn&apos;t required to get email alerts.
+              </label>
+            </div>
+          </div>
+
           <button
             type="submit"
             className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"

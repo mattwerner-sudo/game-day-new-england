@@ -5,9 +5,16 @@ import {
   sportNameFromCategory,
   parsePrestoMatchup,
   parsePrestoLocation,
+  parsePrestoSpecialEventInfo,
 } from "./normalize";
-import { deriveSeason, computeDedupeKey } from "../sidearm/normalize";
-import { findSchoolByName, upsertTeam, upsertVenue, upsertEvent } from "../upsert";
+import {
+  deriveSeason,
+  computeDedupeKey,
+  computeSpecialEventDedupeKey,
+  looksLikeMeetName,
+  isOutOfScopeSport,
+} from "../sidearm/normalize";
+import { findSchoolByName, upsertTeam, upsertVenue, upsertEvent, upsertSpecialEvent } from "../upsert";
 import type { School } from "../sidearm/ingestSchool";
 
 export interface PrestoIngestResult {
@@ -16,7 +23,19 @@ export interface PrestoIngestResult {
   updated: number;
   skipped: number;
   sportsSeen: number;
+  meets: number;
+  tooOld: number;
 }
+
+// Confirmed real, not assumed: Presto's composite feed returns each school's entire
+// historical archive, not just the current/upcoming schedule - a direct query found 8,751
+// ingested events predating 2025 (some back to 2016), all from Presto (SIDEARM's per-sport
+// feeds don't have this problem - confirmed zero old SIDEARM events). None of that serves
+// this product's "what's happening near me this weekend" discovery framing - it's pure dead
+// weight, and it's also where most of the stray pre-normalization sport-name variants
+// actually lived. 90 days back is generous slack for "recently happened, still relevant
+// context" while comfortably excluding years-old history.
+const PRESTO_HISTORY_CUTOFF_DAYS = 90;
 
 /**
  * One school's entire varsity slate in one pass - Presto's composite feed covers every
@@ -30,26 +49,81 @@ export interface PrestoIngestResult {
 export async function ingestSchoolPresto(school: School): Promise<PrestoIngestResult> {
   const hostname = new URL(school.websiteUrl).hostname;
   const icsText = await fetchPrestoIcsFeed(hostname);
-  const rawGames = parsePrestoIcsEvents(icsText);
+  const allRawGames = parsePrestoIcsEvents(icsText);
+
+  const cutoff = new Date(Date.now() - PRESTO_HISTORY_CUTOFF_DAYS * 24 * 60 * 60 * 1000);
+  const rawGames = allRawGames.filter((g) => g.start >= cutoff);
+  const tooOld = allRawGames.length - rawGames.length;
 
   let inserted = 0;
   let updated = 0;
   let skipped = 0;
+  let meets = 0;
   const ownTeamIds = new Map<string, string>(); // "sport|gender" -> teamId, avoids repeat upserts
+
+  /** Shared by both meet-detection paths below - see their respective comments. */
+  async function upsertMeet(eventName: string, game: (typeof rawGames)[number], sport: string, gender: string, venue: { venueName: string | null; city: string | null; state: string | null }): Promise<void> {
+    const venueId = await upsertVenue(venue.venueName ?? "TBD", null, venue.city, venue.state);
+    const dedupeKey = computeSpecialEventDedupeKey({ startDatetime: game.start, sport, gender, eventName });
+
+    const result = await upsertSpecialEvent({
+      sport,
+      gender,
+      season: deriveSeason(sport, game.start),
+      division: null,
+      eventName,
+      venueId,
+      participatingSchoolId: school.id,
+      startDatetime: game.start,
+      endDatetime: game.end,
+      status: "scheduled",
+      source: "presto",
+      sourceEventId: game.uid,
+      dedupeKey,
+    });
+
+    if (result === "inserted") inserted++;
+    else updated++;
+    meets++;
+  }
 
   for (const game of rawGames) {
     if (!game.category) {
       skipped++;
       continue;
     }
+    if (isOutOfScopeSport(game.category)) {
+      skipped++;
+      continue;
+    }
     const sport = sportNameFromCategory(game.category);
     const gender = genderFromCategory(game.category);
 
-    const matchup = parsePrestoMatchup(game.summary, game.location !== null);
+    let matchup = parsePrestoMatchup(game.summary, game.location !== null);
+
     if (!matchup) {
-      skipped++;
-      console.warn(`  [skip] couldn't parse matchup from summary: "${game.summary}"`);
-      continue;
+      const info = parsePrestoSpecialEventInfo(game.summary);
+      if (!info.eventName) {
+        skipped++;
+        console.warn(`  [skip] couldn't parse matchup from summary: "${game.summary}"`);
+        continue;
+      }
+
+      // Same real bug as the SIDEARM adapter (see sidearm/ingestSchool.ts's mirror of this
+      // comment): confirmed real, University of Saint Joseph's own feed has
+      // "(Women's Swimming & Diving) Trinity" with no "vs"/"at" connector at all, where
+      // "Trinity" is a real seeded opponent (Trinity College), not a meet name. Only treat
+      // the extracted text as a genuine meet once it's confirmed NOT to resolve to a real
+      // school. Unlike SIDEARM, Presto's LOCATION field is null for ordinary home/away games
+      // (only populated for neutral-site games - see parsePrestoMatchup) so there's no venue
+      // signal to infer home/away from here - defaults to away, matching Presto's own
+      // convention that an entry with no location is a normal (usually away) game.
+      const resolvedAsSchool = await findSchoolByName(info.eventName);
+      if (!resolvedAsSchool) {
+        await upsertMeet(info.eventName, game, sport, gender, info);
+        continue;
+      }
+      matchup = { isHome: false, opponentName: info.eventName, isNeutralSite: false };
     }
 
     const teamKey = `${sport}|${gender}`;
@@ -60,6 +134,18 @@ export async function ingestSchoolPresto(school: School): Promise<PrestoIngestRe
     }
 
     const opponent = await findSchoolByName(matchup.opponentName);
+
+    // Second meet-detection path (see looksLikeMeetName's comment on the SIDEARM side, and
+    // sidearm/ingestSchool.ts's mirror of this same check): some Presto meets also run
+    // through the plain vs/at shape - confirmed real, e.g. Central Connecticut's "... at NEC
+    // Tournament". Only reclassify when the "opponent" both fails to resolve to a real
+    // seeded school AND matches a real-world meet/tournament keyword.
+    if (!opponent && looksLikeMeetName(matchup.opponentName)) {
+      const venue = game.location ? parsePrestoLocation(game.location) : { venueName: null, city: null, state: null };
+      await upsertMeet(matchup.opponentName, game, sport, gender, venue);
+      continue;
+    }
+
     const opponentName = opponent?.name ?? matchup.opponentName;
     const opponentTeamId = opponent ? await upsertTeam(opponent.id, sport, gender) : null;
 
@@ -93,7 +179,7 @@ export async function ingestSchoolPresto(school: School): Promise<PrestoIngestRe
     }
     const venueId = await upsertVenue(venueName, homeSchoolId, city, state);
 
-    const dedupeKey = computeDedupeKey({ startDatetime: game.start, homeName, awayName });
+    const dedupeKey = computeDedupeKey({ startDatetime: game.start, homeName, awayName, gender });
 
     const result = await upsertEvent({
       type: "game",
@@ -110,6 +196,7 @@ export async function ingestSchoolPresto(school: School): Promise<PrestoIngestRe
       source: "presto",
       sourceEventId: game.uid,
       dedupeKey,
+      opponentNameRaw: opponent ? null : opponentName,
       sourceUrl: game.url ? `https://${hostname}${game.url}` : null,
       // No structured "Tickets:/TV:/Streaming Video:" lines in Presto's DESCRIPTION the way
       // SIDEARM has (confirmed - it's just a plain restatement of the summary) - ticketUrl/
@@ -121,5 +208,5 @@ export async function ingestSchoolPresto(school: School): Promise<PrestoIngestRe
     else updated++;
   }
 
-  return { fetched: rawGames.length, inserted, updated, skipped, sportsSeen: ownTeamIds.size };
+  return { fetched: rawGames.length, inserted, updated, skipped, sportsSeen: ownTeamIds.size, meets, tooOld };
 }

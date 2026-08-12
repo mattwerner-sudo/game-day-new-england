@@ -1,5 +1,6 @@
 import { alias } from "drizzle-orm/pg-core";
-import { and, asc, eq, gte, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
+import { and, arrayOverlaps, asc, eq, gte, inArray, isNotNull, lt, or, sql } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { db } from "./client";
 import { events, teams, schools, venues } from "./schema";
 
@@ -78,6 +79,7 @@ export function toDateParam(date: Date): string {
 
 export interface WeekendEvent {
   id: string;
+  type: string;
   sport: string;
   gender: string;
   season: string;
@@ -86,6 +88,10 @@ export interface WeekendEvent {
   status: string;
   homeSchoolName: string | null;
   awaySchoolName: string | null;
+  // special_event only (meets, invitationals, championships - see CLAUDE.md Section 5/31).
+  // homeSchoolName/awaySchoolName stay null for these rows - there's no single home team.
+  eventName: string | null;
+  participatingSchoolNames: string[];
   venueName: string | null;
   venueCity: string | null;
   venueState: string | null;
@@ -97,6 +103,17 @@ export interface WeekendEvent {
   streamingAudioUrl: string | null;
 }
 
+/**
+ * Resolves a special_event's participatingSchoolIds (uuid[]) to real school names via a
+ * correlated subquery, sorted so display order is stable. Empty array (not null) for game
+ * rows, so callers never need a null check before .map()/.join().
+ */
+const participatingSchoolNamesSql = sql<string[]>`coalesce(
+  (select array_agg(${schools.name} order by ${schools.name}) from ${schools}
+   where ${schools.id} = any(${events.participatingSchoolIds})),
+  array[]::text[]
+)`;
+
 export interface EventFilters {
   division?: string;
   state?: string;
@@ -105,7 +122,7 @@ export interface EventFilters {
   league?: string;
 }
 
-export async function getFilteredEvents(
+async function getFilteredEventsUncached(
   range: DateRange,
   filters: EventFilters,
   now?: Date
@@ -136,20 +153,36 @@ export async function getFilteredEvents(
     conditions.push(or(eq(homeLeague, filters.league), eq(awayLeague, filters.league))!);
   }
   if (filters.schoolId) {
-    conditions.push(or(eq(homeSchools.id, filters.schoolId), eq(awaySchools.id, filters.schoolId))!);
+    // A special_event has no home/away side to match against - a participating school shows
+    // up in participatingSchoolIds instead, so the school filter needs a third arm to catch
+    // meets/championships a filtered school is actually in.
+    conditions.push(
+      or(
+        eq(homeSchools.id, filters.schoolId),
+        eq(awaySchools.id, filters.schoolId),
+        sql`${filters.schoolId} = any(${events.participatingSchoolIds})`
+      )!
+    );
   }
 
   const rows = await db
     .select({
       id: events.id,
+      type: events.type,
       sport: events.sport,
       gender: events.gender,
       season: events.season,
       division: events.division,
       startDatetime: events.startDatetime,
       status: events.status,
-      homeSchoolName: homeSchools.name,
-      awaySchoolName: awaySchools.name,
+      // Falls back to the raw opponent name text when a side didn't resolve to a seeded
+      // New England school (e.g. UConn vs. Syracuse - Syracuse isn't in this app's schools
+      // table, but the feed did name them) - only "TBD" (page.tsx/templates.ts's own final
+      // fallback) when even that raw text is missing.
+      homeSchoolName: sql<string | null>`coalesce(${homeSchools.name}, ${events.opponentNameRaw})`,
+      awaySchoolName: sql<string | null>`coalesce(${awaySchools.name}, ${events.opponentNameRaw})`,
+      eventName: events.eventName,
+      participatingSchoolNames: participatingSchoolNamesSql,
       venueName: venues.name,
       venueCity: venues.city,
       venueState: venues.state,
@@ -173,13 +206,50 @@ export async function getFilteredEvents(
 }
 
 /**
+ * Cached wrapper - the homepage re-runs this query on every single request
+ * (`export const dynamic = "force-dynamic"`, since it reads searchParams), against a table
+ * with no meaningful write traffic outside a human manually re-running `ingest.ts` at most a
+ * few times a day. A 60s revalidate window means concurrent/repeat visitors for the same
+ * (range, filters) combination hit the cache instead of re-querying Postgres every time,
+ * while staying fresh enough that a fresh ingest shows up within a minute - no explicit
+ * revalidateTag plumbing from the ingestion scripts, which don't run inside a Next.js
+ * request context and can't call it anyway (confirmed: unstable_cache-wrapped functions
+ * throw "incrementalCache missing" if invoked outside Next's server runtime - safe to
+ * import this module from a standalone script as long as it never calls this wrapper
+ * specifically, which none of them do - see scripts/send-alerts.ts, geocode-venues.ts).
+ * `now` is deliberately left out of the cache key (it changes every millisecond and would
+ * defeat caching entirely) - the 60s TTL is what governs freshness instead.
+ *
+ * unstable_cache round-trips its return value through JSON (confirmed real, not assumed -
+ * caught by an actual browser check: `startDatetime.toLocaleDateString is not a function`),
+ * so `startDatetime` comes back a plain string, not a `Date`, breaking every caller that
+ * calls a Date method on it (page.tsx's formatDay/formatTime, templates.ts's
+ * toLocaleString). Revive it explicitly rather than let every consumer guard against a
+ * string-or-Date union.
+ */
+const getFilteredEventsCached = unstable_cache(
+  getFilteredEventsUncached,
+  ["getFilteredEvents"],
+  { revalidate: 60 }
+);
+
+export async function getFilteredEvents(
+  range: DateRange,
+  filters: EventFilters,
+  now?: Date
+): Promise<WeekendEvent[]> {
+  const rows = await getFilteredEventsCached(range, filters, now);
+  return rows.map((r) => ({ ...r, startDatetime: new Date(r.startDatetime) }));
+}
+
+/**
  * Upcoming events (next 7 days) for the fan-follow alert digest - one game where either
- * side's school is in schoolIds. Uses the same homeSchools/awaySchools alias + or() pattern
- * as getFilteredEvents so a fan following two schools that play each other only sees the
- * game once. Excludes cancelled games (an unsolicited email about a cancelled game is worse
- * than a webpage silently listing one) and, like the rest of the product, anything outside
- * New England. Doesn't surface special_event rows once those exist later - this only checks
- * home/away team ids.
+ * side's school is in schoolIds, or a special_event (meet/championship) any of schoolIds is
+ * participating in. Uses the same homeSchools/awaySchools alias + or() pattern as
+ * getFilteredEvents so a fan following two schools that play each other only sees the game
+ * once. Excludes cancelled games (an unsolicited email about a cancelled game is worse than a
+ * webpage silently listing one) and, like the rest of the product, anything outside New
+ * England.
  */
 export async function getUpcomingEventsForSchoolIds(
   schoolIds: string[],
@@ -191,14 +261,21 @@ export async function getUpcomingEventsForSchoolIds(
   const rows = await db
     .select({
       id: events.id,
+      type: events.type,
       sport: events.sport,
       gender: events.gender,
       season: events.season,
       division: events.division,
       startDatetime: events.startDatetime,
       status: events.status,
-      homeSchoolName: homeSchools.name,
-      awaySchoolName: awaySchools.name,
+      // Falls back to the raw opponent name text when a side didn't resolve to a seeded
+      // New England school (e.g. UConn vs. Syracuse - Syracuse isn't in this app's schools
+      // table, but the feed did name them) - only "TBD" (page.tsx/templates.ts's own final
+      // fallback) when even that raw text is missing.
+      homeSchoolName: sql<string | null>`coalesce(${homeSchools.name}, ${events.opponentNameRaw})`,
+      awaySchoolName: sql<string | null>`coalesce(${awaySchools.name}, ${events.opponentNameRaw})`,
+      eventName: events.eventName,
+      participatingSchoolNames: participatingSchoolNamesSql,
       venueName: venues.name,
       venueCity: venues.city,
       venueState: venues.state,
@@ -220,7 +297,15 @@ export async function getUpcomingEventsForSchoolIds(
         gte(events.startDatetime, start),
         lt(events.startDatetime, end),
         inArray(venues.state, NE_STATES),
-        or(inArray(homeSchools.id, schoolIds), inArray(awaySchools.id, schoolIds)),
+        or(
+          inArray(homeSchools.id, schoolIds),
+          inArray(awaySchools.id, schoolIds),
+          // Confirmed real bug, not assumed: a hand-rolled `sql` template interpolating a
+          // plain JS array here bound it as a single malformed scalar parameter ("malformed
+          // array literal" from Postgres) rather than a real array - drizzle-orm's own
+          // arrayOverlaps() handles array-parameter binding correctly, this doesn't.
+          arrayOverlaps(events.participatingSchoolIds, schoolIds)
+        ),
         or(eq(events.status, "scheduled"), eq(events.status, "postponed"), eq(events.status, "final"))
       )
     )
@@ -238,7 +323,7 @@ export interface FilterOptions {
 }
 
 /** Populate filter dropdowns from what's actually in the seeded/ingested data today. */
-export async function getFilterOptions(): Promise<FilterOptions> {
+async function getFilterOptionsUncached(): Promise<FilterOptions> {
   const [divisionRows, schoolRows, sportRows, schoolLeagueRows, teamLeagueRows] = await Promise.all([
     db.selectDistinct({ value: schools.division }).from(schools).orderBy(asc(schools.division)),
     db.select({ id: schools.id, name: schools.name }).from(schools).orderBy(asc(schools.name)),
@@ -262,3 +347,17 @@ export async function getFilterOptions(): Promise<FilterOptions> {
     leagues,
   };
 }
+
+/**
+ * Cached wrapper - divisions/schools/sports/leagues barely change (only when a new school
+ * or sport gets ingested, which happens rarely and manually), yet this scans schools/events/
+ * teams from scratch on every single homepage request today. A 5-minute revalidate window
+ * is imperceptible against how infrequently this data actually changes. See
+ * getFilteredEvents's cached wrapper above for why this is safe to import from standalone
+ * scripts (none of which call this specific wrapper).
+ */
+export const getFilterOptions = unstable_cache(
+  getFilterOptionsUncached,
+  ["getFilterOptions"],
+  { revalidate: 300 }
+);

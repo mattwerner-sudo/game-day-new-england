@@ -27,7 +27,9 @@ async function ingestOneSchool(school: School, sportSlugs?: string[]) {
       const result = await ingestSchoolPresto(school);
       console.log(
         `  composite                    fetched ${result.fetched}, inserted ${result.inserted}, ` +
-          `updated ${result.updated}, skipped ${result.skipped} (${result.sportsSeen} sports seen)`
+          `updated ${result.updated}, skipped ${result.skipped} (${result.sportsSeen} sports seen)` +
+          (result.meets > 0 ? `, meets ${result.meets}` : "") +
+          (result.tooOld > 0 ? `, ${result.tooOld} too old (skipped)` : "")
       );
       await recordFeedHealth(school.id, "composite", { success: true });
     } catch (err) {
@@ -59,7 +61,8 @@ async function ingestOneSchool(school: School, sportSlugs?: string[]) {
       const result = await ingestSchoolSport(school, slug);
       console.log(
         `  ${slug.padEnd(28)} "${result.sportTitle}" — fetched ${result.fetched}, ` +
-          `inserted ${result.inserted}, updated ${result.updated}, skipped ${result.skipped}`
+          `inserted ${result.inserted}, updated ${result.updated}, skipped ${result.skipped}` +
+          (result.meets > 0 ? `, meets ${result.meets}` : "")
       );
       await recordFeedHealth(school.id, slug, { success: true });
     } catch (err) {

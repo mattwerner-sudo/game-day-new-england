@@ -50,15 +50,36 @@ export default async function ManagePage({
               ))}
             </ul>
 
-            <form method="POST" action="/api/unsubscribe" className="mt-6">
-              <input type="hidden" name="token" value={token} />
-              <button
-                type="submit"
-                className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-              >
-                Unsubscribe from all alerts
-              </button>
-            </form>
+            <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+              {fan.smsConsentedAt && !fan.smsUnsubscribedAt
+                ? `Text alerts: on (${fan.phone})`
+                : "Text alerts: off"}
+            </p>
+
+            <div className="mt-6 flex flex-wrap gap-3">
+              {fan.smsConsentedAt && !fan.smsUnsubscribedAt && (
+                <form method="POST" action="/api/unsubscribe">
+                  <input type="hidden" name="token" value={token} />
+                  <input type="hidden" name="scope" value="sms" />
+                  <button
+                    type="submit"
+                    className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                  >
+                    Stop texts only
+                  </button>
+                </form>
+              )}
+              <form method="POST" action="/api/unsubscribe">
+                <input type="hidden" name="token" value={token} />
+                <input type="hidden" name="scope" value="all" />
+                <button
+                  type="submit"
+                  className="rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                >
+                  Unsubscribe from all alerts
+                </button>
+              </form>
+            </div>
           </>
         )}
       </main>

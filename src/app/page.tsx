@@ -59,6 +59,19 @@ function formatLocation(event: WeekendEvent): string {
   return parts.length > 0 ? parts.join(", ") : "Venue TBD";
 }
 
+/**
+ * special_event rows (meets, invitationals, championships - CLAUDE.md Section 5/31) have no
+ * single home/away side - eventName + the list of participating schools we know about (may
+ * be a subset of everyone actually there, since it only accumulates as each participating
+ * school's own feed gets ingested - see upsertSpecialEvent) stand in for the "X at Y" line a
+ * regular game shows.
+ */
+function formatParticipants(names: string[]): string {
+  if (names.length === 0) return "Participating schools TBD";
+  if (names.length === 1) return names[0];
+  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
+}
+
 function groupByDay(events: WeekendEvent[]): Map<string, WeekendEvent[]> {
   const groups = new Map<string, WeekendEvent[]>();
   for (const event of events) {
@@ -158,7 +171,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
               day: "numeric",
             })}{" "}
             · {events.length} game{events.length === 1 ? "" : "s"}
-            {hasFilters ? " matching your filters" : " across the 37-school batch"}
+            {hasFilters
+              ? " matching your filters"
+              : ` across ${filterOptions.schools.length} schools`}
           </p>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -331,7 +346,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
           <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">
             <p className="text-zinc-600 dark:text-zinc-400">
               No games {range === "today" ? "today" : range === "week" ? "in the next 7 days" : range === "month" ? "that month" : "this weekend"}
-              {hasFilters ? " match your filters" : ""} in the current 37-school batch.
+              {hasFilters ? " match your filters" : ""} across the {filterOptions.schools.length} schools currently covered.
               Most varsity seasons run fall (Aug–Nov), winter (Nov–Mar), and spring (Mar–May) —
               check back closer to the season, widen ingestion coverage, or adjust your filters.
             </p>
@@ -357,11 +372,22 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
                           {formatTime(event.startDatetime)}
                         </span>
                       </div>
-                      <p className="mt-2 text-base font-medium text-zinc-950 dark:text-zinc-50">
-                        {event.awaySchoolName ?? "TBD"}{" "}
-                        <span className="text-zinc-400">at</span>{" "}
-                        {event.homeSchoolName ?? "TBD"}
-                      </p>
+                      {event.type === "special_event" ? (
+                        <>
+                          <p className="mt-2 text-base font-medium text-zinc-950 dark:text-zinc-50">
+                            {event.eventName ?? "Meet"}
+                          </p>
+                          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                            {formatParticipants(event.participatingSchoolNames)}
+                          </p>
+                        </>
+                      ) : (
+                        <p className="mt-2 text-base font-medium text-zinc-950 dark:text-zinc-50">
+                          {event.awaySchoolName ?? "TBD"}{" "}
+                          <span className="text-zinc-400">at</span>{" "}
+                          {event.homeSchoolName ?? "TBD"}
+                        </p>
+                      )}
                       <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
                         {formatLocation(event)}
                         {event.division ? ` · ${event.division}` : ""}

@@ -223,6 +223,62 @@ they're built — better to learn that early and cheaply than after the sponsor 
 This is a genuinely new entity (users/follows/consent, per 0.4), not an extension of the existing
 schema — scope it as such.
 
+### 0.9 External landscape watch-list (started 2026-08-11)
+
+Entities worth tracking over time as the plan evolves — not active integrations, just a durable
+record so their status can be checked/updated in future sessions rather than re-researched from
+scratch. Append a dated line under each as things change (funding, product moves, outreach status,
+etc.) rather than editing the initial assessment in place.
+
+**Seated ([seated.com](https://www.seated.com/))** — *pattern validation, not a competitor or
+partner candidate.* Fan-follows-artist → SMS alert the moment a nearby show is announced → ticket
+straight to phone. Founded 2017, acquired by Sofar Sounds in Feb 2021, **re-acquired by its own
+founders (David McKay, John Griffin) in June 2025 with no outside investors** — both deal prices
+undisclosed. Relevance: this is the same mechanic as this repo's own `fans`/`fan_follows` MVP
+(Section 20), built independently before this entity was found — real-world evidence (not proof)
+that fans will opt into free affinity-based alerts, and their current feature set ("audience-
+building and pixeling for ad strategy") is a concrete reference spec for what the Sponsor
+Dashboard (4.3) eventually needs to do. Different vertical (national touring music vs. regional
+college sports), no multi-surface ambition on their side — no actual overlap risk.
+- *Watch for:* any public numbers on how their audience-monetization actually performs (would be
+  the closest available proxy for GDNE's own Class B "will sponsors pay attributed prices"
+  assumption, Section 0.8).
+
+**Northeast Sports Network / NSN ([nsnsports.net](https://www.nsnsports.net/))** — *complementary
+core product, latent competitor on sponsor dollars.* Vermont-based (Lyndonville), founded 2006,
+21-50 employees, private/bootstrapped (no funding rounds found). Streams/produces video for the
+same NESCAC/NEWMAC/Northern New England schools this repo ingests, with existing institutional
+partnerships (Castleton, Johnson State, Lyndon State, Norwich, UVM) and an existing sponsorship/ad
+sales business. Revenue estimated ~$2.4M/year by third-party aggregators (not company-disclosed,
+treat as low-confidence). No public valuation or deal history exists to anchor a number against.
+- **Partner angle (near-term, cheap):** their stream URLs could populate this repo's already-built
+  `tvNetwork`/`streamingVideoUrl` columns ([Section 17](CLAUDE.md:1004),
+  `src/ingestion/sidearm/normalize.ts` `parseStreamingInfo`) — schedule discovery feeding their
+  video product's viewership.
+- **Competitor angle (activates at Gate G3):** once the Sponsor Dashboard (4.3) exists, NSN and
+  GDNE would be selling regional-brand ad dollars against the same schools — bundling beats
+  competing here if outreach happens before G3 ships.
+- **Acquisition angle (Gate G1+ only, not now):** their 20 years of real institutional school trust
+  would shortcut the "25 ingested ≠ 34 signed" gap (Section 0.7), but this is a post-capital move
+  that also cuts against the plan's software-leverage cost thesis (Section 0.3) — a labor-intensive
+  production business, not a tuck-in. File away, don't act on pre-Gate-0.
+- *Watch for:* any ownership change, funding event, or expansion beyond Northern New England that
+  would change this calculus.
+
+**New England CFB Project / @CFBNewEngland ([x.com/CFBNewEngland](https://x.com/CFBNewEngland))**
+— *distribution/marketing partner candidate, not a business entity.* Fan community X account,
+Boston, joined June 2023, 2,297 followers as of 2026-08-11. Football-only (mixes FBS/FCS: BC,
+UConn, Holy Cross, UMass, URI, UNH, Bryant, Yale), content is fan culture/hot-takes/crowdsourced
+road-trip schedules, monetized only via a coffee-brand affiliate tie-in (BannerYearCoffee). No
+product, no owned audience data (X owns that relationship), no revenue model to speak of — not a
+competitor, customer, or acquisition target in any real sense.
+- **Partner angle:** a warm, on-persona, pre-built audience of exactly the "Saturday Seeker" /
+  regional-fan persona this repo's discovery product and Section 20's follow/alert MVP target.
+  Cheap, low-commitment top-of-funnel distribution (co-promo of the "follow your school" feature)
+  worth a casual outreach — no product integration needed, unlike NSN.
+- *Watch for:* follower growth, any monetization beyond the coffee affiliate, or a pivot toward an
+  actual product (would change the "not a business entity" read above).
+
 ---
 
 ## 1. What this is
@@ -1708,3 +1764,622 @@ re-run discipline used throughout this project. Final Neon state: 98 schools, ze
 teams, 42,718 events, feed-health clean - matches local closely. Production already reflects this
 (app code was pushed before this data update, per the established migrate/seed-then-deploy
 ordering).
+
+## 31. Session log: 2026-08-11 (continued) — multi-team meet (`special_event`) support built and
+verified locally, NOT yet applied to Neon
+
+Built out the `events.type: "special_event"` shape (designed on Day 1, Section 5, never wired up)
+across both ingestion adapters, per the founder's "yes, and then complete it" following the #4/#5
+prioritization work above. Cross country, track & field, golf, tennis, swimming, and rowing meets/
+invitationals/championships don't fit the 2-team game shape - this closes that gap.
+
+**Design:**
+- `parseSpecialEventName()` (SIDEARM) strips a `[N]`/leading-bracket token plus the known
+  `<School> <Sport>` prefix off the SUMMARY, leaving the meet name - see the real-data note below,
+  this required a real fix mid-build.
+- `parsePrestoSpecialEventInfo()` (Presto) parses a trailing `hosted by <School>` clause and a
+  trailing `(Venue - City, State)` parenthetical out of the SUMMARY text - Presto meets carry no
+  LOCATION field at all (confirmed via a real feed, Bridgewater State's), unlike SIDEARM's meets
+  which do populate LOCATION the same way a normal game does.
+- `computeSpecialEventDedupeKey()`: date (calendar day, not exact time) + sport + **gender** +
+  normalized event name. Venue deliberately excluded, same reasoning as the game dedupe key.
+  Known accepted limitation: if two schools' feeds spell the same meet's name differently, they
+  won't collapse into one row - each shows up separately rather than risking a false merge.
+- `upsertSpecialEvent()` (new, in `upsert.ts`): unlike `upsertEvent`'s full-overwrite semantics,
+  this **merges** `participatingSchoolIds` (union, not replace) across independent ingestion
+  passes from each participating school's own feed - verified for real post-ingest (758 meets
+  have 2+ real participating schools merged in, e.g. "NESCAC Championship" golf accumulated 4
+  schools from 4 independent feeds).
+
+**Two real bugs found via live data mid-build, not assumed away:**
+1. The `[N]` prefix on some SIDEARM meet summaries (e.g. `"[N] Amherst College Men's Cross
+   Country  Little Three Championships"`) turned out to be a **literal, un-templated placeholder
+   string** on Amherst's site, not a numeric id as it first appeared - confirmed by inspecting raw
+   codepoints. Some entries for the very same sport have no bracket at all. Fixed by stripping any
+   bracket token generically (`/^\[[^\]]*\]\s*/`) instead of assuming digits.
+2. **A pre-existing, previously-undetected bug spanning the entire 98-school dataset**, found while
+   testing: some schools' SIDEARM/Presto feeds (confirmed real: Williams' cross country, Central
+   Connecticut's Presto feed) publish meets through the *same* `vs`/`at` shape a real 2-team game
+   uses, e.g. `"Williams College Men's Cross Country at Little Three Championships"`. Without a
+   second check, `parseMatchup`/`parsePrestoMatchup` "successfully" parsed these, treating the meet
+   name as a literal unresolvable opponent school - silently creating a broken one-sided "game" row
+   (real team on one side, null on the other) instead of a proper special event. **This has been
+   happening for as long as ingestion has run in this project, not something this session
+   introduced** - a direct DB query found ~4,229 existing `game` rows across nearly every
+   meet-based sport (golf, tennis, swimming, rowing, track, cross country) matching this exact
+   broken shape, roughly 9% of all events in the database. Fixed by adding `looksLikeMeetName()` -
+   a word-boundary keyword regex (championship/invitational/classic/regional/tournament/etc.) -
+   and only reclassifying as a meet when BOTH signals agree: the "opponent" fails to resolve to a
+   real seeded school AND matches a meet keyword. A genuine opponent name essentially never
+   contains these words; every confirmed real meet name in this data does. Known accepted edge
+   case: a legitimate single-opponent exhibition game whose name happens to contain a keyword (e.g.
+   a hypothetical "vs. [Country] National Team" game) would be misclassified as a meet - judged
+   low-frequency and low-harm (still a real event row, just the wrong `type`) rather than worth a
+   more complex heuristic.
+
+**Verified against real local data, in this order:** standalone parser tests against real captured
+SIDEARM/Presto summary text; a full `ingest.ts --all` run (98 schools, zero errors); a direct DB
+query confirming cross-school `participatingSchoolIds` accumulation is real (758 multi-school
+rows); a cleanup pass that identified and deleted the 4,229 stale pre-fix broken `game` rows
+(sampled both the delete-list and the keep-list before running it - keep-list was legitimate
+games against real but unseeded out-of-region opponents, e.g. Ramapo, Ecolo, Brandeis, Whittier).
+`tsc --noEmit` clean throughout. Homepage spot-checked in the browser post-cleanup - renders
+correctly, no console errors.
+
+**Final local state: 98 schools, 2,640 teams, 45,838 events (38,766 game + 7,072 special_event).**
+
+**Explicit, known scope boundary - not silently skipped:** this work is ingestion-only. The query
+layer (`getFilteredEvents`, `getUpcomingEventsForSchoolIds`) and the homepage UI still only join on
+`homeTeamId`/`awayTeamId`, so `special_event` rows are captured and correctly deduped/merged in the
+database but **not yet visible anywhere in the product**. Surfacing them (a query change plus an
+event-card variant for `eventName`/`participatingSchoolIds` instead of home/away) is real,
+unstarted follow-up work, not done as part of this session.
+
+**State as of this entry: NOT yet applied to Neon.** Local-only so far, matching this project's
+verify-locally-first discipline. Given this includes both new inserts (special_events) and 4,229
+real deletes (stale broken games), applying to Neon needs the same explicit go-ahead this project
+always asks for before touching production data. Next steps when resumed: run `ingest.ts --all`
+against Neon, run the same cleanup-script pattern against Neon (identify+sample+delete stale
+meet-like broken game rows), verify Neon's final counts match local's shape, then resolve Section
+0.7's "special/multi-school events" open question as closed (with the UI-surfacing gap noted as
+the natural next item).
+
+## 32. Session log: 2026-08-11 (continued) — sport-name normalization pass, IN PROGRESS at this
+entry (re-ingest running)
+
+Founder-reported: the Sport listing had "a lot of fluff and interesting names" (`"#12 Men's
+Tennis"` was the example given). A direct query of distinct `teams.sport` values confirmed it was
+worse than one bad string - **100 distinct values that should collapse to ~41 real canonical
+sports**, caused by several distinct real bugs, not one:
+
+- SIDEARM sometimes titles a sport with an AP/coaches-poll ranking prefix (`"#12 Men's Tennis"`)
+  or an abbreviated gender prefix (`"M-Basketball"`, `"#8 M-Ice Hockey"`) that the existing
+  `sportNameFromTitle()` didn't strip - confirmed these are real SIDEARM-side title variants (not
+  a Presto issue), and confirmed separately that `gender` was already correct on these rows
+  (SIDEARM provides gender via a distinct `genderCode` field, not parsed from the title) - only
+  the `sport` string itself was garbled.
+- Real duplicate/variant naming for the same actual program: `crew` vs `rowing`, `sailing` vs
+  `coed sailing`, `equestrian` vs `equestrian ida`/`equestrian ihsa`, `cheer` vs `cheerleading`,
+  `ultimate` vs `ultimate frisbee`, plus a real typo (`swiming and diving`). Confirmed via Brown's
+  real data that `crew`/`rowing` genuinely both exist as separate real teams there (not just
+  reconciled here) - preserved the real, meaningful heavyweight/lightweight distinction while
+  only normalizing the crew-vs-rowing naming and prefix-vs-parenthetical phrasing
+  (`sportNameFromTitle()` in `src/ingestion/sidearm/normalize.ts`).
+- **Founder decision (asked directly, not assumed):** club/JV/secondary-league entries (`club
+  golf`, `jv basketball`, `necba baseball` - confirmed via Brown's real data to be a wholly
+  separate program from their actual varsity baseball, not a naming variant of it) and esports
+  entries (`esports`, `league of legends`, `valorant`, specific Overwatch/Smash Bros team names)
+  both match this project's documented scope line ([Section 3](CLAUDE.md:315): *"Not covering
+  club or intramural sports - varsity only"*) - founder chose **exclude both from ingestion
+  going forward, and remove what's already ingested**, not just rename them. New
+  `isOutOfScopeSport()` (word-boundary keyword check, enumerated from real observed data) gates
+  this in both adapters - SIDEARM checks it once per sport (skips the whole feed fetch, cheaper),
+  Presto checks it per-event (its `category` field is per-event, not per-feed).
+
+**A real, separately-confirmed finding while this was in progress:** re-checked the 5
+previously-WAF-blocked PrestoSports schools (Framingham State, Salem State, Westfield State, Mass
+Maritime, Worcester State - Section 26/30's known gap) using a genuine full browser session this
+time, not a plain fetch. **All 5 return a hard CloudFront 403 on the homepage itself**, not just
+the composite feed endpoint - this is an edge-level block, not a JS bot-challenge a real browser
+can pass. Previously this was recorded as "needs a real browser render, not tried yet"; it's now
+a **definitively confirmed, tried-and-still-blocked negative result** - closes out that specific
+open question rather than leaving it as unstarted work.
+
+**State as of this entry: fix implemented, `tsc --noEmit` clean, real-data dry-run against all 100
+previously-observed raw values confirmed the mapping (41 canonical sports, 18 correctly flagged
+out-of-scope). A full local `ingest.ts --all` re-ingest is running in the background to apply this
+- not yet complete, cleanup of already-ingested out-of-scope/stale-named team rows not yet done,
+final counts not yet verified. Also fixed in passing (pure text change, unrelated to the DB): the
+homepage's stale Day-1 "37-school batch" copy (`src/app/page.tsx`) now reads the real live school
+count off `filterOptions.schools.length` instead of a hardcoded number, so it can't go stale again
+the next time coverage grows - not yet verified in the browser (dev server can't safely run while
+the background ingest is writing to the same local PGlite directory - the same concurrency hazard
+documented in Section 10/20). This entry will be updated once the re-ingest, cleanup, and
+verification are complete.
+
+**A second, real bug found and fixed while waiting on the above (founder-reported): games against
+an unresolved opponent showed literal "TBD" instead of the real opponent's name** - e.g. "TBD at
+University of Connecticut" when UConn's real opponents (Syracuse men's soccer, Rutgers women's
+soccer) were named plainly in the source feed the whole time
+(`SUMMARY:UConn Men's Soccer vs Syracuse`, confirmed via a direct fetch of UConn's own ICS feed).
+**Root cause: not a data problem, a design gap.** `findSchoolByName()` only resolves opponents
+that are seeded New England schools - real, common, non-NE D1 opponents (Syracuse, Rutgers, and
+by the same logic every out-of-region opponent across the dataset) fail to resolve, leaving that
+side's `homeTeamId`/`awayTeamId` null. The opponent's name text *was* being read correctly (used
+to compute the dedupe key) but was never stored anywhere queryable - it was simply discarded once
+the dedupe key was computed, and the UI's `?? "TBD"` fallback filled the gap. Likely affects a
+meaningful share of D1 games specifically (D1 schedules are the least regionally concentrated) and
+some D2/D3 out-of-region games too - not a narrow edge case.
+
+**Fix:** new nullable `events.opponent_name_raw` column (migration `drizzle/0008_tranquil_legion.sql`,
+purely additive, generated but **not yet applied** - can't touch the DB while the sport-
+normalization re-ingest above is still running). Both ingestion adapters now pass
+`opponentNameRaw: opponent ? null : opponentName` into `upsertEvent()`. `getFilteredEvents()`/
+`getUpcomingEventsForSchoolIds()` (`src/db/queries.ts`) now `coalesce(schoolName, opponentNameRaw)`
+for both `homeSchoolName`/`awaySchoolName`, so page.tsx and the alert-digest email template (both
+already just consume `homeSchoolName`/`awaySchoolName ?? "TBD"`) get the fix automatically with no
+changes needed on their end - "TBD" now only shows when even the raw feed text is missing, not
+whenever an opponent happens to be outside New England. `tsc --noEmit` clean.
+
+**Sequencing once the DB is free again:** apply migration 0008, run `ingest.ts --all` again
+(dedupe-key-based upsert will backfill `opponent_name_raw` onto all existing affected rows, not
+just new ones going forward), then spot-check UConn's men's/women's soccer specifically in the
+browser to confirm "Syracuse at UConn" / "Rutgers at UConn" render correctly before calling this
+done.
+
+**A third, real bug found and fixed while still waiting on the DB (founder-reported, different
+root cause from both above):** UMass Lowell's schedule showed "at Rhode Island College" for a game
+that's actually against the University of Rhode Island - founder caught this against the school's
+own real published schedule (goriverhawks.com). Traced to the actual raw feed:
+`SUMMARY:...Men's Soccer at Rhode Island - Exhibition`, venue `Kingston, RI, URI Soccer Complex`
+(Kingston is URI's campus, not Rhode Island College's - confirms the real opponent). **Root cause:
+`findSchoolByName()`'s substring `ILIKE '%name%'` match with no `ORDER BY` and `.limit(1)` - both
+"Rhode Island College" and "University of Rhode Island" are seeded schools whose names contain
+"Rhode Island", so the query non-deterministically picked one, and picked wrong.** Checked for the
+same risk elsewhere and found a second real, confirmed case while investigating (not hypothetical):
+"Massachusetts" alone matches four seeded schools ("University of Massachusetts Amherst/Boston",
+"Massachusetts College of Liberal Arts", "Massachusetts Institute of Technology") - confirmed via
+the same UMass Lowell feed using bare "at Massachusetts" for a game whose venue ("Amherst, MA, Rudd
+Field") independently confirms it means UMass Amherst.
+
+**Fix:** new `src/ingestion/schoolAliases.ts` (mirrors `conferenceOverrides.ts`'s pattern for
+known, real, confirmed exceptions rather than a guessed-at generic algorithm) - a small lookup
+table of confirmed-ambiguous short forms to their correct canonical school, checked in
+`findSchoolByName()` (`src/ingestion/upsert.ts`) before the generic substring fallback. The
+fallback itself now has `.orderBy(schools.name)` too, so any other not-yet-discovered collision is
+at least deterministic/reproducible rather than arbitrary, even though it isn't necessarily
+correct until it's confirmed and added to the alias table. `tsc --noEmit` clean. Not yet verified
+against live data (needs the DB) - add to the same post-re-ingest verification pass as the other
+two fixes above: spot-check UMass Lowell's men's soccer resolves to "University of Rhode Island",
+not "Rhode Island College".
+
+**Also noticed in passing, not fixed (separate, smaller question, flagging not actioning):** the
+game that surfaced this bug is itself explicitly labeled "- Exhibition" in the raw SUMMARY, and
+`parseMatchup()`'s existing " - " suffix-strip silently drops that status today - exhibition/
+scrimmage games are currently ingested and displayed identically to real counted games, with
+nothing distinguishing them. Worth a founder call on whether that's fine as-is or worth a status
+flag later - not touched here since it's unrelated to the wrong-opponent bug that was reported.
+
+## 33. Session log: 2026-08-11 (continued) — all three fixes above verified locally; closing out
+Section 32/33's in-flight state
+
+Once the DB was free: applied migration 0008, ran one more full `ingest.ts --all` (98 schools,
+zero errors) to backfill `opponent_name_raw` and repoint games affected by the school-alias fix.
+
+**Sport-normalization cleanup:** a first cleanup pass used "zero events attached via
+homeTeamId/awayTeamId" as the signal for "this is a stale old-naming-variant team, safe to
+delete" - **caught by its own dry run before deleting anything:** this incorrectly flagged ~500
+perfectly legitimate, correctly-named teams (cross country, golf, track and field, rowing, etc.)
+because meet-heavy sports' events are almost entirely `special_event` rows keyed by
+`participatingSchoolIds` (school-level), not by team id - they'll always show zero "game"-type
+rows attached even when completely current. Rebuilt the detection using the *exact* known list of
+pre-fix raw sport strings instead of a heuristic. Also found or checked, before deleting: 66
+events still pointed at old-variant team ids even after the re-ingest (older/completed games that
+had fallen outside the live feed's window and were never touched by the dedupe-key-based repoint)
+- these were explicitly repointed to the correct team (via `upsertTeam` + a direct update) before
+the old team rows were deleted, so nothing was silently lost. **Final state: 41 distinct canonical
+`teams.sport` values (was 100), 37 out-of-scope teams removed, 265 old-naming-variant teams
+repointed-then-removed, zero dangling `homeTeamId`/`awayTeamId` references, 98 schools/2,404
+teams/45,932 events intact.**
+
+**Opponent-name-raw and school-alias fixes:** verified directly against the re-ingested data -
+`opponent_name_raw` is now populated for out-of-region opponents across many sports (Syracuse,
+Rutgers, Rutgers-Camden, etc., confirmed via direct query), and UMass Lowell's men's soccer game
+against Rhode Island now has dedupe key
+`...university-of-rhode-island|umass-lowell` (previously resolved to the wrong seeded school,
+Rhode Island College).
+
+**A separate, pre-existing project quirk surfaced while trying to browser-verify all this (not a
+bug introduced today):** starting the dev server to visually confirm the fixes threw `column
+events.opponent_name_raw does not exist` - not a code bug, but confirmation that **`.env.local`
+sets `DATABASE_URL`, so the dev server always points at Neon (production), not local PGlite**
+(same category of issue as Section 14/25's prior encounter with this). Confirmed `npx tsx
+scripts/*.ts` invocations (ingest/migrate/verify, all session) never see that variable in a plain
+shell - only Next's own dev-server process auto-loads `.env.local` - so every ingest/migration/
+verification this entire session correctly targeted local PGlite as intended; only today's
+browser-based visual check hit this. Since Neon doesn't have any of today's changes yet (special
+events, sport normalization, or these two opponent-resolution fixes), the dev server will keep
+erroring against it until Neon is brought current - true end-to-end browser verification is
+blocked on that, not on anything wrong with the fixes themselves, which are already confirmed
+correct via direct DB queries above.
+
+**State as of this entry: all three fixes (opponent-name-TBD, Rhode-Island/Massachusetts
+resolution, sport-name normalization) plus the earlier multi-team-meets feature are complete and
+verified locally, NONE yet applied to Neon.** Next step is a founder decision on whether to push
+this full accumulated batch to production now.
+
+## 34. Session log: 2026-08-11/12 (continued) — special_event UI surfacing + Presto history
+cutoff + two more real ingestion bugs found. IN PROGRESS at this entry (background ingest running)
+
+Founder said "Deal. Continue" to the special_event UI gap flagged as the highest-leverage next
+item. Built it, then found and fixed two more real, previously-undetected bugs along the way -
+this section is the accurate in-flight record in case the session gets interrupted overnight.
+
+**1. special_event UI surfacing (done, verified):** `getFilteredEvents()`/
+`getUpcomingEventsForSchoolIds()` (`src/db/queries.ts`) now select `type`, `eventName`, and a new
+`participatingSchoolNames` (resolved from `participatingSchoolIds` via a correlated
+`array_agg` subquery - empty array, not null, for game rows). Homepage (`src/app/page.tsx`) and
+the alert-digest email template (`src/email/templates.ts`) both branch on `event.type ===
+"special_event"` to show `eventName` + a formatted participant list instead of "away at home".
+School filter extended with a third OR-arm (`schoolId = any(participating_school_ids)`) so
+following/filtering by school also surfaces meets that school is in. Verified the SQL directly
+(real multi-school accumulation confirmed, e.g. "Williams Invitational" showing 2 real schools)
+before touching the UI.
+
+**2. Presto history-cutoff fix (done, verified):** confirmed while chasing "leftover" sport-name
+fluff that it wasn't leftover - `events.sport` is a *separate* denormalized column from
+`teams.sport` that the earlier Section 32 cleanup never touched (the Sport filter dropdown reads
+`events.sport` directly). Chasing that down surfaced something much bigger: **Presto's composite
+feed returns each school's entire historical archive back to 2016+, not just current/upcoming
+games** - confirmed via a direct query (33,533 events total predated a 90-day-back cutoff, of
+which **13,968 were Presto** vs. 19,565 SIDEARM - SIDEARM's own history is real, current-season
+data that should NOT be touched, a mistake caught by a dry run before deleting anything so broad).
+Fix: `PRESTO_HISTORY_CUTOFF_DAYS = 90` filter in `src/ingestion/presto/ingestSchool.ts` (skips
+events older than 90 days before ingesting them at all, going forward), plus a one-time scoped
+delete (`source = 'presto' AND startDatetime < cutoff` only) of the existing backlog. Also fixed:
+`events.sport` itself directly updated to the correct canonical values (41 canonical values,
+matching `teams.sport`), and 9 remaining out-of-scope events (esports/JV, that had survived the
+team-level cleanup) deleted outright. **Final verified state: 39 distinct `events.sport` values,
+zero out-of-scope, zero dangling FK references, 98 schools, 32,457 events (5,318 special_event).**
+
+**3. A third real bug, found via the special_event browser check itself (not yet fully resolved
+across both adapters as of this entry):** the very first real special_event card rendered in the
+browser was wrong - "Men's Golf" / "Gordon College" as if a real seeded school were a tournament
+name. Root-caused to a **third real SIDEARM/Presto summary format neither adapter's meet-detection
+accounted for**: `"<School> <Sport>  <Opponent>"` with **no "vs"/"at" connector word at all**
+(confirmed real, SIDEARM: `"Saint Joseph's College of Maine Men's Golf  Gordon College"`; Presto:
+`"(Women's Swimming & Diving) Trinity"`). Both adapters' existing meet-detection only fires when
+`parseMatchup`/`parsePrestoMatchup` return null (no vs/at match) - which is correct for THIS
+format too - but neither one checked whether the leftover prefix-stripped text was actually a
+*real, resolvable seeded school* before treating it as a meet name. A direct scan for
+`special_event` rows whose `eventName` resolves via `findSchoolByName()` found **85 real
+misclassifications** across both sources.
+
+**Fix, both adapters:** before calling `upsertMeet()`, resolve the extracted name via
+`findSchoolByName()` first - if it resolves, treat it as a real 2-team game instead (synthesizing
+a `matchup`-shaped object) rather than a special event. Home/away has no grammatical signal in
+this format (no "vs"/"at" to read direction from), so it's inferred differently per adapter:
+**SIDEARM** compares the event's LOCATION city/state against the ingesting school's own city -
+mismatch means away (real signal, SIDEARM's LOCATION is populated for most entries). **Presto**
+has no such signal available (LOCATION is null for ordinary home/away entries - only populated for
+neutral-site games, an existing convention) - defaults to away, which is Presto's own existing
+convention for a location-less entry, not a special case invented here. Both fixes typecheck
+clean and were verified against the real raw feed text before writing them (not assumed).
+
+**Real complication found while fixing this:** since a `special_event`'s dedupeKey format
+(`special|date|sport|gender|eventName`) is structurally different from a game's
+(`date|home|away`), fixing the *detection* logic doesn't retroactively delete the old, now-wrong
+`special_event` row - the corrected ingest just creates/updates a *separate* correct `game` row
+alongside it, leaving a duplicate. Confirmed via the Gordon College case directly (both rows
+existed side by side after a targeted re-ingest). Cleanup requires an explicit pass: for every
+remaining `special_event` whose `eventName` resolves to a real school, verify a matching `game`
+row now exists for the same `sourceEventId` (don't delete without confirming the replacement is
+real - a lesson already learned once this session, Section 33's "zero events" heuristic mistake)
+before deleting the stale row.
+
+**State as of this entry (session ending here for the night, founder going to bed):** the SIDEARM
+fix was applied via a full re-ingest and confirmed working (37 of the original 85 misclassified
+rows got a real replacement game). The **Presto fix was just written and typechecked but its
+re-ingest is still running in the background** (the remaining ~48 of 85 misclassifications were
+all `source: presto`, confirmed via direct query - e.g. the Trinity swimming case above). **Not
+yet done, next steps in order once the running ingest completes:** (1) verify zero errors/98
+schools, (2) re-scan for `special_event` rows whose `eventName` resolves to a real school and
+confirm ~all now have a real `game` replacement, (3) delete the confirmed-stale `special_event`
+duplicates (same safety check as before - verify replacement exists first), (4) do the actual
+browser verification of the special_event feature that this whole detour started from (temporarily
+move `.env.local` aside so the dev server hits local PGlite, not Neon - restore it afterward),
+(5) confirm a real meet card renders correctly with no leftover school-name-as-meet-name garbage.
+Fully safe to resume from a fresh session if interrupted - `ingest.ts --all` is idempotent, matches
+this project's established recovery pattern (Section 26/30 precedent for exactly this scenario).
+**Nothing in this batch has been applied to Neon** - stays true of everything accumulated this
+entire session (Sections 31-34), same as noted at the end of Section 33.
+
+## 35. Session log: 2026-08-12 (continued, late night) — critical foundational bug found and
+fixed: `computeDedupeKey()` was missing gender since Day 1. IN PROGRESS at this entry.
+
+While chasing the SIDEARM third-format fix's Presto counterpart, hit a genuine mystery: the fix
+traced correctly through every single step in isolation (confirmed via direct instrumentation of
+the running code, not just theory) - `parsePrestoMatchup` returned null, `parsePrestoSpecialEventInfo`
+extracted the right name, `findSchoolByName` resolved it, `upsertEvent` was reached with the
+*correct* dedupe key - and yet the database still showed the old, wrong `special_event` row
+completely untouched afterward, every single time, across multiple independent re-runs.
+
+**Root cause, found via direct in-process instrumentation (temporary console.log statements added
+to the real running code, not assumption):** the correct `game` row *was* being created - then
+immediately overwritten by a *different real event* that happened to compute the exact same
+dedupe key. Confirmed directly: Bridgewater State's real 2027-01-27 swim meet against Bentley
+University has both a women's and a men's meet on the same date - `computeDedupeKey()` (the core
+game-identity function used by *every* ingested game since this project's Day 1) never included
+`gender`, only `date + home + away`. Both genders' real, distinct games produced the identical key,
+so whichever one's `upsertEvent` call ran second in the loop silently clobbered the first with no
+error, warning, or any visible signal. This has been true since the dedupe key was first written -
+it had nothing to do with tonight's special_event or third-format work specifically; those
+investigations just happened to use a same-day dual meet as a test case, which is what exposed it.
+
+**Scope:** this affects any sport where a school's men's and women's teams play the *same opponent
+on the same date* - confirmed common for swimming and diving, and structurally likely for
+indoor/outdoor track and field, tennis, and any other dual-meet-format sport. Not every game (most
+team sports schedule men's/women's games on different days), but a real, silent, ongoing data-loss
+bug for exactly the sports where it applies - one gender's real game has been invisibly missing
+from this product for as long as it's been ingesting that pair.
+
+**Fix:** `computeDedupeKey()` (`src/ingestion/sidearm/normalize.ts`) now includes `gender` as a
+fourth key segment, mirroring `computeSpecialEventDedupeKey()`'s identical fix from earlier
+tonight (Section 31) - same root cause, just never applied to the base game key at the time.
+Updated both call sites (`sidearm/ingestSchool.ts`, `presto/ingestSchool.ts`). `tsc --noEmit`
+clean.
+
+**Consequence, not yet resolved as of this entry:** this changes the dedupe key format for
+essentially every existing `game`-type row in the database (old format: `date|home|away`, 2
+pipe-separators; new format: `date|home|away|gender`, 3 pipe-separators - a clean, reliable way to
+distinguish old from new rows for cleanup). A full re-ingest will create correctly-keyed new rows
+for everything still in a live feed's window, leaving the old-format rows as stale duplicates -
+same pattern as every other dedupe-key-format change tonight, just at a much larger scale (this
+touches the core game table, not a narrower slice like sport names or special events).
+
+**State as of this entry: fix written and typechecked, a full local re-ingest is running in the
+background (not yet complete). Once it finishes, in order:** (1) verify zero errors/98 schools,
+(2) identify old-format `game` rows (2-pipe dedupeKey, `type = 'game'`) that have a confirmed
+newer replacement (same `sourceEventId`, matching the same safety-checked pattern used all night -
+verify the replacement is real before deleting, don't delete on a heuristic), delete them, (3)
+re-run the special_event misclassification scan from Section 34 - the ~26 remaining cases (Trinity,
+Bentley University, etc.) should now resolve correctly since the underlying same-day-dual-meet
+collision is fixed, delete those confirmed-stale special_event rows too, (4) re-verify
+`events.sport` distinct values, total counts, zero dangling references, (5) finally do the actual
+browser verification of the special_event UI feature that this entire investigation chain started
+from four sections ago, (6) update this section with final verified numbers.
+
+**Fully safe to resume if interrupted overnight** - same idempotent `ingest.ts --all` recovery
+pattern used throughout this project (Section 26/30/33 precedent). **Nothing in Sections 31-35 has
+been applied to Neon** - everything remains local-only pending a founder decision on deployment.
+
+**CLOSED OUT, verified end to end:** the re-ingest completed (98 schools, zero errors). Cleanup
+of the now-massive old-dedupe-key backlog needed a real detour: a correlated-subquery SQL approach
+timed out completely against PGlite at this scale (27,207 old-format rows) - even a non-correlated
+`IN`-subquery version hung for 5+ minutes and had to be killed via `kill -TERM` on the actual OS
+process (confirmed safe - it was still mid-SELECT, never reached a write, verified via a
+post-kill sanity read). **The fix that actually worked: pull all `type='game'` rows into memory in
+one plain SELECT (474ms for 53,066 rows), classify old-vs-new format in JS by counting `|`
+separators, and issue chunked `DELETE ... WHERE id IN (...)` batches (1000 rows/chunk, 316ms
+total)** - a good general lesson for this project: PGlite's query planner struggles with
+computed-expression self-joins/correlated subqueries at real scale; pull-and-filter-in-JS is far
+more reliable here than clever SQL, worth remembering for any future large cleanup.
+
+**Final verified numbers:** 26,395 stale old-format `game` rows deleted (812 legitimately left
+alone - real events no longer present in any live feed, same "can't refresh what the source no
+longer serves" category as the Presto history cutoff). Re-ran the special_event misclassification
+scan: 81 of the original 85 now have a confirmed real `game` replacement and were deleted; the
+remaining 4 (all `swimming and diving`, e.g. "Wellesley College" via Merrimack's feed) are
+**already-past events (November 2025)** no longer served by their source feed at all - explicitly
+left alone rather than chased further, since they're invisible to the product's forward-only UI
+either way.
+
+**State: 98 schools, 2,460 teams, 31,912 events (26,671 game + 5,241 special_event), 39 distinct
+`events.sport` values (zero out-of-scope), zero dangling FK references, zero remaining dedupeKey
+collisions among game rows** (confirmed via a direct `GROUP BY dedupe_key HAVING count(*) > 1`
+check - empty result).
+
+**Browser-verified, definitively, all three fixes together:** temporarily moved `.env.local`
+aside (found it had actually been left aside from an earlier check earlier this session and never
+restored - harmless, since nothing else touched it in the meantime) so the dev server hit local
+PGlite. Homepage: dynamic school count ("22 games across 98 schools", no stale "37-school batch"
+text), real opponent names ("UConn at Boston University", not "TBD"). Sept 2026 date range:
+a real special_event card rendered correctly ("FPU Fall Kickoff" / "Saint Anselm College" /
+"Keene Country Club, Keene, NH"), and **the original bug report's exact case now renders
+correctly as a real game**: "Saint Joseph's College of Maine at Gordon College" (previously showed
+as a fake special_event named "Gordon College"). Sport filter dropdown confirmed clean - all 39
+canonical values, no ranking prefixes, no `m-`/`w-` abbreviations, no club/JV/esports entries.
+`.env.local` restored afterward.
+
+**Everything from tonight (Sections 31-35) is complete, internally consistent, and verified
+locally. Still nothing applied to Neon** - that remains the one open decision for whenever the
+founder is back: special_event/meets support, the sport-name normalization pass, the
+Presto-history-cutoff fix, the opponent-name-TBD fix, the Rhode-Island/Massachusetts
+disambiguation fix, and this session's centerpiece - the gender-inclusive dedupe key fix that
+was silently losing real same-day dual-meet data since Day 1 - are all bundled together as one
+large, coherent, ready-to-deploy batch.
+
+## 36. Session log: 2026-08-12 (continued) — real performance/reliability pass: missing
+indexes + query caching, both verified with evidence, not assumed
+
+Founder asked to "ruthlessly prioritize... reliably and performance based, do not cut corners."
+Audited the actual schema and hot-path query code rather than guess - found two concrete,
+unglamorous but real gaps: **zero indexes on any column the homepage's every single request
+actually filters/sorts/joins on**, and **zero caching despite `export const dynamic =
+"force-dynamic"` re-running every query, including the largely-static filter-dropdown data, on
+every request**.
+
+**Indexes added** (`src/db/schema.ts`, migration `drizzle/0009_silly_sway.sql`, purely additive):
+`events.start_datetime` (every query's date-range WHERE + ORDER BY), `events.sport`,
+`events.division` (optional filters), `events.home_team_id`/`away_team_id`/`venue_id` (FK join
+columns - Postgres doesn't auto-index these), `venues.state` (unconditional NE-scope filter on
+every query, per Section 1/2/3). **Verified with a real `EXPLAIN`, not assumed**: confirmed
+`Bitmap Index Scan on events_start_datetime_idx` and `Bitmap Index Scan on venues_state_idx` in
+the query plan post-migration - a real, measured change from what would otherwise be sequential
+scans across ~32K events and climbing.
+
+**Caching added** (`src/db/queries.ts`): `getFilteredEvents` (60s revalidate) and
+`getFilterOptions` (300s revalidate) now wrapped in `unstable_cache`. Rationale: this data only
+changes when a human manually re-runs `ingest.ts`, at most a few times a day - re-querying
+Postgres from scratch on every single page view for data that's usually identical to the last
+request is real, avoidable cost, especially against Neon's serverless connection model.
+
+**Two real things caught during verification, not shipped blind:**
+1. **Confirmed before writing any caching code**: `unstable_cache`-wrapped functions throw
+   `Invariant: incrementalCache missing` if invoked outside Next's server runtime - checked
+   directly (not assumed) that `scripts/send-alerts.ts`/`geocode-venues.ts` (standalone scripts
+   that import from `queries.ts`) never call the two wrapped functions specifically, only
+   `getUpcomingEventsForSchoolIds` (deliberately left uncached) and the `NE_STATES` constant -
+   confirmed safe by actually running `send-alerts.ts` end to end afterward, not just reasoning
+   about it.
+2. **A real bug caught by the browser check, not shipped**: `unstable_cache` round-trips its
+   return value through its cache store (JSON-based), so `startDatetime` came back as a plain
+   string, not a `Date` - broke every `.toLocaleDateString()`/`.toLocaleString()` call downstream
+   (page.tsx's day/time formatting, the alert-digest email template). Fixed by having
+   `getFilteredEvents`'s public export explicitly revive `startDatetime` back into a real `Date`
+   after the cached call, rather than pushing a string-or-Date union onto every consumer.
+
+**Verified end to end in the browser** (same `.env.local`-aside trick as the rest of this
+session, to point the dev server at local PGlite instead of Neon): homepage renders identically
+to pre-change (dynamic school count, real opponent names, no console/server errors), and a
+filtered view (`?sport=soccer`) correctly returns a distinct, correct result (14 vs. 22
+unfiltered) - confirms no cache-key collision across different filter combinations.
+
+`tsc --noEmit` clean throughout. Local-only, like everything else this session - not yet applied
+to Neon.
+
+**What's still real and unaddressed, named honestly rather than left implicit:** the venue
+geocoding gap (was 81.9% missing lat/lng as of Section 33's check, likely still similar) blocks
+any future map feature but isn't a current performance/correctness issue since nothing renders
+coordinates today. Ingestion itself remains human-triggered, not cron'd (Section 0.3) - a
+reliability gap in the "does data go stale silently" sense, not a performance one; automating it
+would need a scheduler (Vercel Cron or similar) and is a larger, separate decision, not bundled
+into this pass.
+
+## 37. Session log: 2026-08-12 (continued) — everything from Sections 31-36 deployed to Neon
+(production), first time any of it has run outside local PGlite
+
+Founder said "Deploy to neon and caffeinate." This is the first time the entire batch built up
+across this whole session - multi-team meets/special_event support, sport-name normalization
+(100+ variants down to 39), the Presto 90-day history cutoff, the opponent-name-TBD fix, the
+Rhode-Island/Massachusetts disambiguation fix, the gender-inclusive dedupe-key fix (the
+session's most serious find - was silently losing real same-day dual-meet data since Day 1), and
+the DB indexes + query caching from Section 36 - has run against anything other than local PGlite.
+
+**Sequence run (each command needs `DATABASE_URL` explicitly exported first - confirmed again
+this session that plain `npx tsx` invocations don't auto-load `.env.local` the way Next's own
+dev server does, see Section 33):** `migrate.ts` (both pending migrations - `opponent_name_raw`
+column, the six new indexes) → `seed.ts` (no-op, confirms `schools.ts` hasn't drifted from
+Neon's existing 98) → `ingest.ts --all` under `caffeinate -dis` (98 schools, zero errors, ran
+with every fix already active from the start - unlike local, which discovered these bugs
+incrementally across several re-ingests) → the same cleanup sequence proven out locally: sport/
+team-level cleanup (out-of-scope + old-variant teams), `events.sport` direct correction,
+Presto historical-backlog delete, old-format (gender-missing) dedupe-key game-row cleanup,
+special_event misclassification rescan.
+
+**A real mistake caught and fixed mid-deploy, not silently absorbed:** the special_event
+misclassification rescan script (reused verbatim from the local cleanup) timed out after 5
+minutes against Neon. Root cause: it does a DB round-trip per row (`findSchoolByName` plus a
+sibling lookup) for every special_event - fine at local PGlite's near-zero in-process latency,
+not viable at real network latency against a remote Postgres for thousands of sequential awaited
+calls. This is the exact same class of mistake as the correlated-SQL dedupe-key cleanup that had
+to be killed earlier tonight (Section 35) - should have generalized that lesson to every cleanup
+script before running any of them against Neon, not just the one that already burned once.
+Killed cleanly (confirmed via `ps aux` - it was still mid-scan, never reached a write, so nothing
+was lost) and rewrote as the same bulk-fetch-then-compute-in-JS pattern already proven for the
+dedupe-key cleanup: pull all special_event rows + all schools + all events into memory in one
+`Promise.all`, resolve names and check for a real game replacement using in-memory lookups
+instead of per-row queries. 561ms instead of a 5-minute timeout. **Turned out to be a genuine
+zero-cleanup-needed result, not a script failure**: Neon's pre-deploy code never had the
+special_event feature at all, so every one of the 4,832 rows this ingest created was built fresh
+with every fix already in place - there was no old, pre-fix data left to be stale against, unlike
+local's incremental-fix history.
+
+**Final verified state (Neon/production), confirmed with the same checks used locally throughout
+this session:**
+
+| | Before this deploy | After |
+|---|---|---|
+| Schools | 98 | 98 |
+| Teams | 2,628 | 2,453 |
+| Events | 42,718 | 35,647 (30,815 game + 4,832 special_event) |
+| Distinct `events.sport` values | 100+ (unfixed) | 39 |
+| Dangling FK references | (never checked) | 0 |
+| Dedupe-key collisions among game rows | (the Day-1 bug, unknown count) | 0 |
+
+The event-count drop is expected and correct, not data loss - it's the combined effect of
+dropping years of dead Presto history, removing club/JV/esports noise, and collapsing duplicate
+rows that existed under the old (gender-missing) dedupe key, exactly mirroring what happened
+locally in Sections 33-35.
+
+**Production is now running everything built this session.** Not yet done, explicitly not
+assumed: a live visual check of the actual deployed Vercel URL (everything above was verified via
+direct Neon queries, not a browser hit against the real production domain) - worth doing the next
+time this repo is opened, not urgent tonight given the query-level verification is thorough.
+
+## 38. Session log: 2026-08-12 (continued) — SMS reminders built as a second, genuinely separate
+consent channel alongside email
+
+Founder wanted text reminders in addition to email alerts. Researched providers first
+(Twilio recommended over cheaper alternatives like Telnyx/Bandwidth specifically because of its
+compliance hand-holding - matches Section 6's "boring, well-documented tools" principle more
+than raw per-message cost does) before writing any code, then built it properly rather than as
+a bolt-on: **TCPA requires SMS consent to be separate and explicit from email consent**, not a
+second checkbox that reuses the same "yes" - this shaped the whole data model, not just the UI.
+
+**Schema** (migration `drizzle/0010_brown_wraith.sql`): `fans` gets `phone`, `smsConsentedAt`,
+`smsUnsubscribedAt` - a fully independent consent lifecycle from `confirmedAt`/`unsubscribedAt`.
+Unlike email's double opt-in (click a link to activate), SMS consent *is* the checkbox
+submission itself - TCPA's "prior express written consent" is satisfied at that moment, so the
+immediate confirmation text is a disclosure receipt, not a second confirmation gate.
+`fan_alert_log` gets a `channel` column, now part of the unique key (`fanId, eventId, channel`)
+instead of just `(fanId, eventId)` - **without this, sending the email digest would have
+silently marked those events as "sent" for SMS too**, since both channels used to share one
+dedup table with no way to distinguish them.
+
+**New files**: `src/fans/phone.ts` (US-only E.164 normalization, deliberately minimal - no new
+phone-parsing dependency, matches this product's actual US-only scope), `src/sms/send.ts`
+(Twilio SDK, same `TWILIO_*` env-var-unset-means-dry-run pattern as `email/send.ts`),
+`src/sms/templates.ts` (a compact digest format capped at 4 games + "+N more" - SMS cost scales
+per 160-char segment on every recurring send, unlike email, so this is deliberately terser than
+`digestEmail`, not just a shorter version of the same content), `src/app/api/sms/inbound/route.ts`
+(Twilio webhook for real inbound STOP/START handling - keeps this app's own
+`smsUnsubscribedAt` in sync with Twilio's carrier-level opt-out rather than trusting Twilio's
+side alone and letting the manage page silently drift stale).
+
+**`/follow` form**: phone + SMS checkbox are a visually separate block with the full required
+TCPA disclosure inline (sender identity, frequency, rates, STOP/HELP) and an explicit "consent
+isn't required to get email alerts" line - both the checkbox's independence and that specific
+sentence are compliance requirements, not UX polish. `/manage` now shows SMS status and a
+"stop texts only" action distinct from "unsubscribe from all" (which now correctly stops both
+channels, not just email).
+
+**A real bug found and fixed while testing the digest end-to-end, not shipped blind**: 
+`getUpcomingEventsForSchoolIds`'s special_event support (built in Section 34) used a hand-rolled
+`sql` template - `` sql`${events.participatingSchoolIds} && ${schoolIds}::uuid[]` `` - to check
+school overlap. Never actually exercised until tonight's SMS testing finally ran
+`send-alerts.ts` for the first time since that change: threw `malformed array literal` because
+interpolating a plain JS array into a raw `sql` template doesn't bind it as a real Postgres
+array parameter. Fixed with drizzle-orm's own `arrayOverlaps()` helper, which handles array
+parameter binding correctly - a real, generalizable lesson (prefer the ORM's typed helpers over
+hand-rolled `sql` templates for anything beyond a plain scalar), not just a one-off fix.
+
+**Verified end to end in the browser + directly against local PGlite** (`.env.local` moved
+aside again, same pattern as the rest of this session): registered a test fan with phone + SMS
+checkbox checked, confirmed the dry-run confirmation text fired with correct disclosure copy and
+E.164-normalized number; confirmed the inbound webhook's STOP and START (including
+lowercase "stop") both correctly updated `smsUnsubscribedAt` in the database, not just returned
+an empty TwiML response; confirmed "stop texts only" on `/manage` correctly left email
+untouched; ran `scripts/send-alerts.ts` for real against a school with genuine upcoming games
+(Amherst had none this week - correctly produced "nothing new" on both channels, not a bug) and
+confirmed both the email and SMS digest fired with matching, correct content, then confirmed a
+second run correctly deduped and sent nothing further on either channel independently. Test fan
+data deleted afterward via cascade, not left in the DB. `tsc --noEmit` clean throughout.
+
+**State: complete and verified locally. Not yet applied to Neon** (this session's Section 37
+Neon deploy happened before this SMS work started) - the migration and code are ready to go the
+next time a full deploy pass runs. **Founder action still needed, same category as the
+Resend/Neon/Vercel account gaps**: a real Twilio account with 10DLC brand/campaign registration
+completed (takes real business info and days, not instant) before `TWILIO_ACCOUNT_SID`/
+`TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` can be set and real texts can go out - until then,
+everything works end-to-end in dry-run exactly like email did before `RESEND_API_KEY` was set.
