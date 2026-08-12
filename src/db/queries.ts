@@ -205,6 +205,45 @@ async function getFilteredEventsUncached(
   return rows;
 }
 
+/** Single event for its detail page (src/app/events/[id]/page.tsx) - not date-range scoped. */
+export async function getEventById(id: string): Promise<WeekendEvent | null> {
+  const rows = await db
+    .select({
+      id: events.id,
+      type: events.type,
+      sport: events.sport,
+      gender: events.gender,
+      season: events.season,
+      division: events.division,
+      startDatetime: events.startDatetime,
+      status: events.status,
+      homeSchoolName: sql<string | null>`coalesce(${homeSchools.name}, ${events.opponentNameRaw})`,
+      awaySchoolName: sql<string | null>`coalesce(${awaySchools.name}, ${events.opponentNameRaw})`,
+      eventName: events.eventName,
+      participatingSchoolNames: participatingSchoolNamesSql,
+      venueName: venues.name,
+      venueCity: venues.city,
+      venueState: venues.state,
+      ticketUrl: events.ticketUrl,
+      sourceUrl: events.sourceUrl,
+      tvNetwork: events.tvNetwork,
+      streamingVideoUrl: events.streamingVideoUrl,
+      radioNetwork: events.radioNetwork,
+      streamingAudioUrl: events.streamingAudioUrl,
+    })
+    .from(events)
+    .leftJoin(homeTeams, eq(events.homeTeamId, homeTeams.id))
+    .leftJoin(homeSchools, eq(homeTeams.schoolId, homeSchools.id))
+    .leftJoin(awayTeams, eq(events.awayTeamId, awayTeams.id))
+    .leftJoin(awaySchools, eq(awayTeams.schoolId, awaySchools.id))
+    .leftJoin(venues, eq(events.venueId, venues.id))
+    .where(eq(events.id, id))
+    .limit(1);
+
+  if (!rows[0]) return null;
+  return { ...rows[0], startDatetime: new Date(rows[0].startDatetime) };
+}
+
 /**
  * Cached wrapper - the homepage re-runs this query on every single request
  * (`export const dynamic = "force-dynamic"`, since it reads searchParams), against a table

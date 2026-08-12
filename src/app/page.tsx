@@ -10,6 +10,7 @@ import {
   WeekendEvent,
   EventFilters,
 } from "@/db/queries";
+import { formatGender, formatSport, formatDay, formatTime, formatLocation, formatParticipants } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -19,58 +20,6 @@ const RANGE_LABELS: Record<DateRange, string> = {
   week: "Next 7 Days",
   month: "Month",
 };
-
-function formatGender(gender: string): string {
-  if (gender === "mens") return "Men's";
-  if (gender === "womens") return "Women's";
-  return "Coed";
-}
-
-function formatSport(sport: string): string {
-  return sport
-    .split(" ")
-    .map((w) => w[0].toUpperCase() + w.slice(1))
-    .join(" ");
-}
-
-function formatDay(date: Date): string {
-  return date.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
-}
-
-/**
- * "Cole Field, Williamstown, MA" when we know the building; "Williamstown, MA" when we
- * only know the city (venueName falls back to the city itself in that case - see
- * parseLocation() - so skip it here rather than repeat "Williamstown, Williamstown, MA").
- */
-function formatLocation(event: WeekendEvent): string {
-  const parts = [
-    event.venueName && event.venueName !== event.venueCity ? event.venueName : null,
-    event.venueCity,
-    event.venueState,
-  ].filter((p): p is string => Boolean(p));
-  return parts.length > 0 ? parts.join(", ") : "Venue TBD";
-}
-
-/**
- * special_event rows (meets, invitationals, championships - CLAUDE.md Section 5/31) have no
- * single home/away side - eventName + the list of participating schools we know about (may
- * be a subset of everyone actually there, since it only accumulates as each participating
- * school's own feed gets ingested - see upsertSpecialEvent) stand in for the "X at Y" line a
- * regular game shows.
- */
-function formatParticipants(names: string[]): string {
-  if (names.length === 0) return "Participating schools TBD";
-  if (names.length === 1) return names[0];
-  return `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`;
-}
 
 function groupByDay(events: WeekendEvent[]): Map<string, WeekendEvent[]> {
   const groups = new Map<string, WeekendEvent[]>();
@@ -372,26 +321,28 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
                           {formatTime(event.startDatetime)}
                         </span>
                       </div>
-                      {event.type === "special_event" ? (
-                        <>
+                      <Link href={`/events/${event.id}`} className="block hover:opacity-80">
+                        {event.type === "special_event" ? (
+                          <>
+                            <p className="mt-2 text-base font-medium text-zinc-950 dark:text-zinc-50">
+                              {event.eventName ?? "Meet"}
+                            </p>
+                            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                              {formatParticipants(event.participatingSchoolNames)}
+                            </p>
+                          </>
+                        ) : (
                           <p className="mt-2 text-base font-medium text-zinc-950 dark:text-zinc-50">
-                            {event.eventName ?? "Meet"}
+                            {event.awaySchoolName ?? "TBD"}{" "}
+                            <span className="text-zinc-400">at</span>{" "}
+                            {event.homeSchoolName ?? "TBD"}
                           </p>
-                          <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                            {formatParticipants(event.participatingSchoolNames)}
-                          </p>
-                        </>
-                      ) : (
-                        <p className="mt-2 text-base font-medium text-zinc-950 dark:text-zinc-50">
-                          {event.awaySchoolName ?? "TBD"}{" "}
-                          <span className="text-zinc-400">at</span>{" "}
-                          {event.homeSchoolName ?? "TBD"}
+                        )}
+                        <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                          {formatLocation(event)}
+                          {event.division ? ` · ${event.division}` : ""}
                         </p>
-                      )}
-                      <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                        {formatLocation(event)}
-                        {event.division ? ` · ${event.division}` : ""}
-                      </p>
+                      </Link>
                       {(event.ticketUrl ||
                         event.sourceUrl ||
                         event.streamingVideoUrl ||

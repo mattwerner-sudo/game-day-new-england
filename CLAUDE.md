@@ -2383,3 +2383,23 @@ Resend/Neon/Vercel account gaps**: a real Twilio account with 10DLC brand/campai
 completed (takes real business info and days, not instant) before `TWILIO_ACCOUNT_SID`/
 `TWILIO_AUTH_TOKEN`/`TWILIO_FROM_NUMBER` can be set and real texts can go out - until then,
 everything works end-to-end in dry-run exactly like email did before `RESEND_API_KEY` was set.
+
+## 39. Session log: 2026-08-12 (continued) — real per-event pages, closing Section 6's Day-1 SEO
+requirement
+
+First crawlable, individually-linkable page for a single game/meet - previously the whole
+product was one list view. `src/app/events/[id]/page.tsx`: real `generateMetadata` (title,
+description, canonical, OG/Twitter cards) and JSON-LD (`schema.org/SportsEvent`, with
+`homeTeam`/`awayTeam` for games or `competitor` for special_events). `src/app/sitemap.ts` lists
+every upcoming event plus the static pages, scoped to future events only (stays well under the
+50K-URL sitemap limit, matches the product's own forward-looking scope). Shared formatters
+(`formatGender`/`formatSport`/`formatLocation`/etc., plus new `eventTitle`) extracted from
+`page.tsx` into `src/lib/format.ts` so both pages use identical logic, not a fork. Homepage event
+cards now link to their detail page (title/matchup area only, kept separate from the external
+ticket/streaming/"Game Info" buttons to avoid nested `<a>` tags). New `getEventById()` in
+queries.ts, uncached (single-row lookups, no caching needed).
+
+Verified in the browser: card links resolve correctly, a real game page and a real
+special_event page both render with correct metadata/JSON-LD, sitemap.xml lists real event URLs,
+an invalid event ID correctly 404s. `tsc --noEmit` clean. Local-only - not yet committed as of
+this entry (pushed immediately after, no separate gap expected).

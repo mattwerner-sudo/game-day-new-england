@@ -1,0 +1,189 @@
+import type { Metadata } from "next";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getEventById, WeekendEvent } from "@/db/queries";
+import { formatGender, formatSport, formatLocation, formatParticipants, eventTitle } from "@/lib/format";
+
+const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
+
+function description(event: WeekendEvent): string {
+  const when = event.startDatetime.toLocaleDateString("en-US", {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  });
+  return `${formatGender(event.gender)} ${formatSport(event.sport)} - ${when} at ${formatLocation(event)}.`;
+}
+
+/**
+ * Real per-event pages, server-rendered with real metadata - CLAUDE.md Section 6 has called
+ * this a first-class requirement since Day 1 ("organic search is the likely primary
+ * acquisition channel") but nothing crawlable/individually-linkable existed until now; the
+ * whole product was one list page. JSON-LD uses schema.org's SportsEvent type specifically
+ * (not a generic Event) since that's what search engines use to build rich results for games.
+ */
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const event = await getEventById(id);
+  if (!event) return { title: "Event not found | Game Day New England" };
+
+  const title = `${eventTitle(event)} - ${formatGender(event.gender)} ${formatSport(event.sport)} | Game Day New England`;
+  const desc = description(event);
+  const url = `${BASE_URL}/events/${event.id}`;
+
+  return {
+    title,
+    description: desc,
+    alternates: { canonical: url },
+    openGraph: { title, description: desc, url, type: "website" },
+    twitter: { card: "summary", title, description: desc },
+  };
+}
+
+function jsonLd(event: WeekendEvent): object {
+  const location = {
+    "@type": "Place",
+    name: event.venueName ?? "TBD",
+    address: [event.venueCity, event.venueState].filter(Boolean).join(", ") || undefined,
+  };
+
+  const base: Record<string, unknown> = {
+    "@context": "https://schema.org",
+    "@type": "SportsEvent",
+    name: eventTitle(event),
+    startDate: event.startDatetime.toISOString(),
+    location,
+    url: `${BASE_URL}/events/${event.id}`,
+    eventStatus:
+      event.status === "cancelled"
+        ? "https://schema.org/EventCancelled"
+        : event.status === "postponed"
+          ? "https://schema.org/EventPostponed"
+          : "https://schema.org/EventScheduled",
+  };
+
+  if (event.type !== "special_event") {
+    base.homeTeam = { "@type": "SportsTeam", name: event.homeSchoolName ?? "TBD" };
+    base.awayTeam = { "@type": "SportsTeam", name: event.awaySchoolName ?? "TBD" };
+  } else if (event.participatingSchoolNames.length > 0) {
+    base.competitor = event.participatingSchoolNames.map((name) => ({
+      "@type": "SportsTeam",
+      name,
+    }));
+  }
+
+  return base;
+}
+
+export default async function EventPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const event = await getEventById(id);
+  if (!event) notFound();
+
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-black">
+      <script
+        type="application/ld+json"
+        // eslint-disable-next-line react/no-danger
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd(event)) }}
+      />
+      <main className="mx-auto max-w-xl px-4 py-10">
+        <Link href="/" className="text-sm font-medium text-orange-600 dark:text-orange-400">
+          ← New England College Sports
+        </Link>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
+          <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+            {formatGender(event.gender)} {formatSport(event.sport)}
+          </span>
+          {event.status !== "scheduled" && (
+            <span className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
+              {event.status}
+            </span>
+          )}
+        </div>
+
+        {event.type === "special_event" ? (
+          <>
+            <h1 className="mt-3 text-2xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+              {event.eventName ?? "Meet"}
+            </h1>
+            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+              {formatParticipants(event.participatingSchoolNames)}
+            </p>
+          </>
+        ) : (
+          <h1 className="mt-3 text-2xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+            {event.awaySchoolName ?? "TBD"}{" "}
+            <span className="text-zinc-400">at</span> {event.homeSchoolName ?? "TBD"}
+          </h1>
+        )}
+
+        <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">
+          {event.startDatetime.toLocaleDateString("en-US", {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+            year: "numeric",
+          })}{" "}
+          ·{" "}
+          {event.startDatetime.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+        </p>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          {formatLocation(event)}
+          {event.division ? ` · ${event.division}` : ""}
+        </p>
+
+        {(event.ticketUrl || event.sourceUrl || event.streamingVideoUrl || event.streamingAudioUrl) && (
+          <div className="mt-6 flex flex-wrap gap-2">
+            {event.ticketUrl && (
+              <a
+                href={event.ticketUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700"
+              >
+                Buy Tickets
+              </a>
+            )}
+            {event.streamingVideoUrl && (
+              <a
+                href={event.streamingVideoUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-indigo-700"
+              >
+                Watch{event.tvNetwork ? ` on ${event.tvNetwork}` : ""}
+              </a>
+            )}
+            {event.streamingAudioUrl && (
+              <a
+                href={event.streamingAudioUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-indigo-300 px-3 py-1.5 text-xs font-medium text-indigo-700 hover:bg-indigo-50 dark:border-indigo-800 dark:text-indigo-300 dark:hover:bg-indigo-950"
+              >
+                Listen{event.radioNetwork ? ` on ${event.radioNetwork}` : ""}
+              </a>
+            )}
+            {event.sourceUrl && (
+              <a
+                href={event.sourceUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+              >
+                Game Info
+              </a>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
