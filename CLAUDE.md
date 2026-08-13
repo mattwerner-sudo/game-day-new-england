@@ -2500,3 +2500,47 @@ filter - pre-existing, expected behavior, not something this work touched. `tsc 
 clean throughout.
 
 **Local-only as of this entry - not yet pushed to Neon.**
+
+## 42. Session log: 2026-08-13 (continued) — Notre Dame vs. Navy added; real month-view caching
+bug found and fixed
+
+**Founder asked to add Notre Dame vs. Navy at Gillette Stadium this fall** - a real neutral-site
+game where neither team is a seeded New England school. Exposed a real gap:
+`SpecialEventUpsertInput.participatingSchoolId` assumed at least one known participating school
+always exists. Changed it to `string | null` (`src/ingestion/upsert.ts`) and fixed the merge/
+insert logic accordingly, rather than the unsafe `null as unknown as string` cast tried first
+(which produced a literal `"NULL"` string in `participatingSchoolIds` - caught and re-inserted
+clean). `page.tsx`/`events/[id]/page.tsx` now only render the "participating schools" line when
+`participatingSchoolNames` is non-empty (this game has none), and the event page's JSON-LD falls
+back to splitting a real "X vs. Y" `eventName` for `competitor` data when no seeded schools are
+attached.
+
+**The game didn't show up on the homepage's October month view after being correctly inserted**
+(verified directly in the DB: right venue, right `startDatetime`, right `status`). Root-caused,
+not guessed at: the "week" range for the same date correctly showed it, so this was cache-key
+specific, not a data or query bug. Read the actual dev server logs rather than assuming -
+found `unstable_cache`'s `getFilteredEventsCached` was silently failing to write to Next's data
+cache with `items over 2MB can not be cached` (a full month's result set across 98 schools,
+~3200+ rows with every column, serializes past its 2MB hard limit). On that write failure, Next
+served a stale/wrong result instead of throwing or falling back to the fresh value - the "month"
+view was stuck showing 10 games (from some early-session near-empty-DB state) against a true
+count of 3229, surviving even a full dev-server restart, with zero visible error to a normal
+user or even a quick glance at the page. **Removed the `unstable_cache` wrapper around
+`getFilteredEvents` entirely** rather than trying to shrink the payload under an arbitrary limit
+that will keep growing every season - the page is already `force-dynamic` and re-runs on every
+request regardless, so the wrapper was only ever saving repeat-visitor Postgres round-trips, not
+worth keeping given it can now silently corrupt what users see. Left `getFilterOptions`'s
+separate `unstable_cache` wrapper alone - that result set is a few hundred rows at most, nowhere
+near the limit.
+
+**This was a real, live bug on the deployed site too** (identical code path), not just a local
+quirk - anyone loading a month view heavy enough to cross 2MB would have silently seen stale/
+wrong data with no error. Verified the fix in-browser: October month view now correctly shows
+3229 games including Notre Dame vs. Navy; filtering to football alone (143 games) also confirms
+it renders with the right venue/time. `tsc --noEmit` clean.
+
+**If a caching layer is reintroduced here later**, it needs an actual bound on entry size (e.g.
+cache only the smaller `today`/`weekend`/`week` ranges, or select fewer columns) - not a blanket
+wrapper over an unbounded result set again.
+
+Committed locally (`0239b2f`) - not yet pushed.
