@@ -248,40 +248,21 @@ export async function getEventById(id: string): Promise<WeekendEvent | null> {
 }
 
 /**
- * Cached wrapper - the homepage re-runs this query on every single request
- * (`export const dynamic = "force-dynamic"`, since it reads searchParams), against a table
- * with no meaningful write traffic outside a human manually re-running `ingest.ts` at most a
- * few times a day. A 60s revalidate window means concurrent/repeat visitors for the same
- * (range, filters) combination hit the cache instead of re-querying Postgres every time,
- * while staying fresh enough that a fresh ingest shows up within a minute - no explicit
- * revalidateTag plumbing from the ingestion scripts, which don't run inside a Next.js
- * request context and can't call it anyway (confirmed: unstable_cache-wrapped functions
- * throw "incrementalCache missing" if invoked outside Next's server runtime - safe to
- * import this module from a standalone script as long as it never calls this wrapper
- * specifically, which none of them do - see scripts/send-alerts.ts, geocode-venues.ts).
- * `now` is deliberately left out of the cache key (it changes every millisecond and would
- * defeat caching entirely) - the 60s TTL is what governs freshness instead.
- *
- * unstable_cache round-trips its return value through JSON (confirmed real, not assumed -
- * caught by an actual browser check: `startDatetime.toLocaleDateString is not a function`),
- * so `startDatetime` comes back a plain string, not a `Date`, breaking every caller that
- * calls a Date method on it (page.tsx's formatDay/formatTime, templates.ts's
- * toLocaleString). Revive it explicitly rather than let every consumer guard against a
- * string-or-Date union.
+ * No caching layer here (there used to be an unstable_cache wrapper - removed after a
+ * confirmed real bug: a full month's result set across all 98 schools serializes past
+ * unstable_cache's hard 2MB per-entry limit - "items over 2MB can not be cached" - and on
+ * that write failure Next silently served stale/wrong data instead of throwing, with no
+ * way to detect it short of reading the dev server's own logs. The page is already
+ * `export const dynamic = "force-dynamic"` and re-runs this on every request regardless, so
+ * the wrapper was only ever saving repeat-visitor Postgres round-trips - not worth
+ * reintroducing without a caching approach that has a real bound on entry size).
  */
-const getFilteredEventsCached = unstable_cache(
-  getFilteredEventsUncached,
-  ["getFilteredEvents"],
-  { revalidate: 60 }
-);
-
 export async function getFilteredEvents(
   range: DateRange,
   filters: EventFilters,
   now?: Date
 ): Promise<WeekendEvent[]> {
-  const rows = await getFilteredEventsCached(range, filters, now);
-  return rows.map((r) => ({ ...r, startDatetime: new Date(r.startDatetime) }));
+  return getFilteredEventsUncached(range, filters, now);
 }
 
 /**

@@ -75,6 +75,19 @@ function jsonLd(event: WeekendEvent): object {
       "@type": "SportsTeam",
       name,
     }));
+  } else {
+    // No seeded participating schools (e.g. a manually-entered neutral-site game between two
+    // out-of-region schools, like Notre Dame vs. Navy at Gillette Stadium) - fall back to
+    // splitting a real "X vs. Y" eventName rather than leaving competitor data out entirely.
+    // Only fires on that specific pattern, so a genuine non-two-team meet name (e.g. "FPU Fall
+    // Kickoff") correctly falls through with no competitor field instead of a bad guess.
+    const vsMatch = (event.eventName ?? "").match(/^(.+?)\s+vs\.?\s+(.+)$/i);
+    if (vsMatch) {
+      base.competitor = [vsMatch[1], vsMatch[2]].map((name) => ({
+        "@type": "SportsTeam",
+        name: name.trim(),
+      }));
+    }
   }
 
   return base;
@@ -123,9 +136,11 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             <h1 className="mt-3 text-2xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
               {event.eventName ?? "Meet"}
             </h1>
-            <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-              {formatParticipants(event.participatingSchoolNames)}
-            </p>
+            {event.participatingSchoolNames.length > 0 && (
+              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
+                {formatParticipants(event.participatingSchoolNames)}
+              </p>
+            )}
           </>
         ) : (
           <h1 className="mt-3 text-2xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">

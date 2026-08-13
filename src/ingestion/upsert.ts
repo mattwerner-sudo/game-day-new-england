@@ -202,7 +202,10 @@ export interface SpecialEventUpsertInput {
   division: string | null;
   eventName: string;
   venueId: string | null;
-  participatingSchoolId: string;
+  // Null for events with no seeded participating school at all (e.g. a manually-entered
+  // neutral-site game between two out-of-region schools, like Notre Dame vs. Navy at
+  // Gillette Stadium - neither is a New England school this app tracks as a team).
+  participatingSchoolId: string | null;
   startDatetime: Date;
   endDatetime: Date | null;
   status: string;
@@ -229,7 +232,10 @@ export async function upsertSpecialEvent(data: SpecialEventUpsertInput): Promise
 
   if (existing[0]) {
     const merged = Array.from(
-      new Set([...(existing[0].participatingSchoolIds ?? []), data.participatingSchoolId])
+      new Set([
+        ...(existing[0].participatingSchoolIds ?? []),
+        ...(data.participatingSchoolId ? [data.participatingSchoolId] : []),
+      ])
     );
     await db
       .update(events)
@@ -262,7 +268,7 @@ export async function upsertSpecialEvent(data: SpecialEventUpsertInput): Promise
     eventName: data.eventName,
     homeTeamId: null,
     awayTeamId: null,
-    participatingSchoolIds: [data.participatingSchoolId],
+    participatingSchoolIds: data.participatingSchoolId ? [data.participatingSchoolId] : null,
     venueId: data.venueId,
     startDatetime: data.startDatetime,
     endDatetime: data.endDatetime,

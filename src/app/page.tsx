@@ -338,9 +338,11 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
                             <p className="mt-2 text-base font-medium text-zinc-950 dark:text-zinc-50">
                               {event.eventName ?? "Meet"}
                             </p>
-                            <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-                              {formatParticipants(event.participatingSchoolNames)}
-                            </p>
+                            {event.participatingSchoolNames.length > 0 && (
+                              <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
+                                {formatParticipants(event.participatingSchoolNames)}
+                              </p>
+                            )}
                           </>
                         ) : (
                           <p className="mt-2 text-base font-medium text-zinc-950 dark:text-zinc-50">
