@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEventById, WeekendEvent } from "@/db/queries";
 import { formatGender, formatSport, formatLocation, formatParticipants, eventTitle } from "@/lib/format";
-import { isEmbeddableStream } from "@/lib/embed";
+import { resolveEmbed } from "@/lib/embed";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
 
@@ -99,6 +99,8 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const event = await getEventById(id);
   if (!event) notFound();
 
+  const embed = resolveEmbed(event.streamingVideoUrl);
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <script
@@ -165,14 +167,14 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           {event.division ? ` · ${event.division}` : ""}
         </p>
 
-        {event.streamingVideoUrl && isEmbeddableStream(event.streamingVideoUrl) && (
+        {embed && (
           <div className="mt-6">
             <p className="mb-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              Watch{event.tvNetwork ? ` on ${event.tvNetwork}` : " on Hudl"}
+              Watch on {event.tvNetwork ?? embed.label}
             </p>
             <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
               <iframe
-                src={event.streamingVideoUrl}
+                src={embed.url}
                 className="h-full w-full border-0"
                 allow="autoplay; fullscreen"
                 allowFullScreen
@@ -194,7 +196,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                 Buy Tickets
               </a>
             )}
-            {event.streamingVideoUrl && !isEmbeddableStream(event.streamingVideoUrl) && (
+            {event.streamingVideoUrl && !embed && (
               <a
                 href={event.streamingVideoUrl}
                 target="_blank"
