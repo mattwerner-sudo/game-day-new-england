@@ -2651,3 +2651,49 @@ key fix. Any *new* orphans of this shape shouldn't be possible going forward sin
 key format itself hasn't changed again - but if a similar dedupe-key-shape change is ever made
 again, the same class of orphan will recur unless a cleanup step is included as part of that
 change, not left as a follow-up.
+
+## 45. Session log: 2026-08-13 (continued) — first automated test suite (Vitest), 67 tests
+
+**Founder asked what engineering work was outstanding; the honest answer was "near zero
+must-fix items, but zero test coverage of any kind."** Every verification this entire project
+has ever had - across 44 prior session-log entries - was manual `tsc --noEmit` plus manual
+browser screenshots. Both real production bugs found *this same session* (the `unstable_cache`
+month-view bug in Section 42, the 1,572 orphaned dedupe-key rows in Section 44) shipped and were
+only caught because the founder happened to notice them live on the deployed site, not because
+anything caught them first. Founder picked this as the priority to act on.
+
+Added Vitest (`npm install -D vitest`, `vitest.config.mts`, `npm test`) and wrote 67 unit tests
+against the highest-value pure logic in the codebase - the functions that have historically
+*been* the bugs, not incidental helpers:
+- `src/lib/embed.ts` (`resolveEmbed`) - Hudl/YouTube URL resolution from Section 43.
+- `src/ingestion/sidearm/normalize.ts` - matchup/exhibition parsing, location parsing, sport-name
+  normalization, out-of-scope filtering, state normalization, feed-staleness, and dedupe key
+  computation for both games and special events.
+- `src/db/dateRange.ts` (new, see below) - range-window math, date param parsing.
+- `src/fans/phone.ts` (`normalizeUsPhone`).
+
+**One test is a direct regression guard for Section 44's actual root cause:** `computeDedupeKey`
+now has an explicit test asserting a men's and women's game on the same date/opponent produce
+*different* keys - the exact invariant that was silently violated before gender was added to the
+key, which is what produced all 1,572 orphaned rows in the first place. If a future edit ever
+weakens that invariant again, this test fails immediately instead of silently corrupting data for
+weeks before a founder notices a "TBD" on the live site.
+
+**Prerequisite refactor, not scope creep:** `getRangeWindow`/`parseDateParam`/`toDateParam` were
+pure functions, but they lived inside `src/db/queries.ts`, which instantiates a real DB client
+(`db`) as a module-level side effect of import - real Postgres if `DATABASE_URL` is set, otherwise
+a local PGlite file opened on disk. Importing that module from a test process would risk touching
+the same `.pglite/` directory the dev server uses, the exact concurrency corruption class Section
+10/15 already documented. Extracted the pure functions into a new dependency-free
+`src/db/dateRange.ts`, re-exported via `export * from "./dateRange"` in `queries.ts` so every
+existing call site (`@/db/queries`) kept working unchanged - verified via `tsc --noEmit` and a
+live browser check (month view still renders the correct game count) rather than assumed.
+
+`npm test` (`vitest run`) - 67/67 passing, ~150ms. `tsc --noEmit` clean. Committed (`30822d8`).
+
+**Deliberately out of scope for this pass:** integration tests against the query layer (would
+need a seeded test database, real setup/teardown cost) and E2E/browser tests (Playwright) of the
+actual rendered pages. This first pass targeted pure-function coverage specifically because it's
+free of that infrastructure cost and still covers the functions that have caused every real bug
+found so far - a reasonable next increment if the founder wants deeper coverage later, not
+something this pass tried to solve all at once.
