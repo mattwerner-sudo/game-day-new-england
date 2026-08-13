@@ -100,9 +100,12 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
       <main className="mx-auto max-w-2xl px-4 py-10 sm:px-6">
         <header className="mb-8">
           <div className="flex items-center justify-between">
-            <p className="text-sm font-medium text-orange-600 dark:text-orange-400">
-              New England College Sports
-            </p>
+            <Link
+              href="/"
+              className="text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
+            >
+              🏆 Game Day New England
+            </Link>
             <Link
               href="/follow"
               className="text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
@@ -183,6 +186,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
           )}
 
           <form
+            key={JSON.stringify(params)}
             action="/"
             method="GET"
             className="mt-4 flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950"

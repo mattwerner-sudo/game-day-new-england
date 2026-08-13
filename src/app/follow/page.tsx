@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getFilterOptions } from "@/db/queries";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +9,12 @@ export default async function FollowPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <main className="mx-auto max-w-xl px-4 py-10">
-        <p className="text-sm font-medium text-orange-600 dark:text-orange-400">
-          New England College Sports
-        </p>
+        <Link
+          href="/"
+          className="text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
+        >
+          🏆 Game Day New England
+        </Link>
         <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
           Follow your school
         </h1>
