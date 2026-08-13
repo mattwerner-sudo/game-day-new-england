@@ -3,6 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEventById, WeekendEvent } from "@/db/queries";
 import { formatGender, formatSport, formatLocation, formatParticipants, eventTitle } from "@/lib/format";
+import { isEmbeddableStream } from "@/lib/embed";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
 
@@ -164,6 +165,23 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           {event.division ? ` · ${event.division}` : ""}
         </p>
 
+        {event.streamingVideoUrl && isEmbeddableStream(event.streamingVideoUrl) && (
+          <div className="mt-6">
+            <p className="mb-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              Watch{event.tvNetwork ? ` on ${event.tvNetwork}` : " on Hudl"}
+            </p>
+            <div className="aspect-video w-full overflow-hidden rounded-lg bg-black">
+              <iframe
+                src={event.streamingVideoUrl}
+                className="h-full w-full border-0"
+                allow="autoplay; fullscreen"
+                allowFullScreen
+                loading="lazy"
+              />
+            </div>
+          </div>
+        )}
+
         {(event.ticketUrl || event.sourceUrl || event.streamingVideoUrl || event.streamingAudioUrl) && (
           <div className="mt-6 flex flex-wrap gap-2">
             {event.ticketUrl && (
@@ -176,7 +194,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
                 Buy Tickets
               </a>
             )}
-            {event.streamingVideoUrl && (
+            {event.streamingVideoUrl && !isEmbeddableStream(event.streamingVideoUrl) && (
               <a
                 href={event.streamingVideoUrl}
                 target="_blank"
