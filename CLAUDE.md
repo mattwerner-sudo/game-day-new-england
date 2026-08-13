@@ -279,6 +279,35 @@ competitor, customer, or acquisition target in any real sense.
 - *Watch for:* follower growth, any monetization beyond the coffee affiliate, or a pivot toward an
   actual product (would change the "not a business entity" read above).
 
+**Bannerse ([bannerse.com](https://www.bannerse.com/), found 2026-08-13)** — *latent competitor
+on sponsor dollars, not a discovery-layer competitor.* Sells a white-label "Fanzone" microsite
+directly to individual athletic departments, free of charge (24h white-label launch, zero
+engineering effort on the school's side). Bannerse itself buys the paid social traffic
+(Meta/TikTok/Instagram/YouTube/Google, ads pre-branded with sponsors) that funnels fans into a
+no-login page of gamified engagement — predictions/polls, trivia, selfie contests, cheer zone,
+exclusive video, merch drops, rewards, ticket upsells. Every screen inside is sponsor ad
+inventory (display, video, sponsored content/interactivity); revenue is split with the school.
+No cross-school aggregation of any kind - each Fanzone is single-team, entertainment-first, and
+doesn't touch schedule/discovery at all, so there's no overlap with this repo's actual core
+product. No public school-name/logo list on their site as of this check - can't yet tell if
+they've signed any New England schools specifically.
+- **Competitor angle (activates at Gate G3, same framing as NSN above):** if Bannerse signs a
+  New England school first, that AD may treat sponsor monetization as already "solved" and be a
+  harder sell for GDNE's own Sponsor Dashboard later - same bundle-beats-compete logic as NSN.
+- **Complement angle (more interesting than the competitor angle):** their own funnel starts
+  with a paid "Traffic" step they fund via social ads - the exact problem this repo's SEO/organic
+  discovery traffic already solves for free once a school's own fans are searching for schedule
+  info. "GDNE sends organic schedule-seekers into a Fanzone-style engagement layer" is a
+  plausible, cheap partner conversation, not a stretch.
+- **Business-model reference, useful regardless of partner/competitor status:** their "zero
+  cost, zero risk, revenue share, 24h launch" pitch is a clean, already-market-tested script for
+  exactly the kind of sponsor-funded ask the Sponsor Dashboard (4.3) will eventually need to make
+  to an AD - worth studying the specific framing when that gets built, not just the company's
+  existence.
+- *Watch for:* any named New England school partnerships appearing on their site, funding/scale
+  signals, or a pivot toward cross-school/discovery features that would change the "no overlap"
+  read above.
+
 ---
 
 ## 1. What this is
