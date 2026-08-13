@@ -2403,3 +2403,50 @@ Verified in the browser: card links resolve correctly, a real game page and a re
 special_event page both render with correct metadata/JSON-LD, sitemap.xml lists real event URLs,
 an invalid event ID correctly 404s. `tsc --noEmit` clean. Local-only - not yet committed as of
 this entry (pushed immediately after, no separate gap expected).
+
+## 40. Session log: 2026-08-12 (continued) — robots.txt, then ingestion automation via Vercel Cron
+
+`src/app/robots.ts` (allow all, points to sitemap.xml) - closes the last gap in Section 39's SEO
+work. Committed/pushed separately.
+
+**Ingestion automation**, closing Section 0.3's standing "nothing in this repo is autonomous"
+gap. Extracted `ingestOneSchool()` out of `scripts/ingest.ts` into `src/ingestion/ingestOneSchool.ts`
+so the CLI script and a new `src/app/api/cron/ingest/route.ts` (Vercel Cron target, `vercel.json`
+schedules it daily at 10:00 UTC) call the exact same logic - no separate, drift-prone
+reimplementation. Route requires `Authorization: Bearer $CRON_SECRET` in production (an
+unauthenticated version would let anyone trigger a full ingestion run against every school's
+real site plus Neon - a real cost/abuse vector); dev-mode without `CRON_SECRET` set just warns
+and proceeds.
+
+**Deliberately does not batch/round-robin schools across invocations**, despite a full run
+taking 15-25 minutes and Vercel's serverless timeout (`maxDuration = 300`, the Pro-plan ceiling)
+likely not covering that on constrained plan tiers. Decided against building state/round-robin
+logic to work around this: ingestion is fully idempotent, and this project has already leaned on
+"an interrupted run is safe to just resume" as a real, proven recovery pattern all session
+(founder closing their laptop mid-ingest, killed stuck processes, etc.) - a cron run cut off by a
+platform timeout is the same class of interruption, not a new failure mode requiring new
+engineering. Daily cadence chosen specifically because it's the documented ceiling on Vercel's
+Hobby plan (unknown which tier this project is on) - works either way, can be tightened later if
+confirmed to be on Pro.
+
+**A real, unrelated problem found during verification, not caused by this work**: the local
+PGlite dev database was corrupted - `count(*)` against `schools` failed with a raw WASM
+`RuntimeError: Aborted()`. No concurrent process was touching it (checked via `ps aux` before
+diagnosing), so this wasn't the documented concurrent-access corruption pattern (Section 10/20) -
+most likely just accumulated damage from the sheer write volume tonight (dozens of full
+re-ingests, large bulk deletes, migrations, across many hours in one embedded WASM Postgres
+instance). Recovered by moving `.pglite/` aside and rebuilding from `migrate.ts` + `seed.ts` -
+correct and low-risk since local PGlite has always been fully disposable/reproducible in this
+project, never a source of truth (Neon is). Backup deleted after confirming the rebuild + a
+targeted re-ingest worked correctly. **Worth knowing for future sessions**: PGlite may need an
+occasional full local rebuild after enough cumulative write volume in one long session - not
+something to chase root-causing further, just resolve the same way if it recurs.
+
+Verified: CLI re-test (`ingest.ts "Amherst College" mens-soccer`) confirms the extracted shared
+function still works correctly; the cron route hit directly in dev mode shows the expected
+"CRON_SECRET not set" warning, then real ingestion starting (`=== Amherst College ... 25
+sport(s) ===` in server logs) - stopped intentionally before the full 98-school run finished
+locally, since the underlying per-school logic was already proven both by this same check and
+extensively all session. `tsc --noEmit` clean. **`CRON_SECRET` still needs to be set in Vercel's
+environment variables** for this to actually run in production - same founder-action category as
+the Resend/Twilio/Neon gaps, flagged here rather than assumed done.
