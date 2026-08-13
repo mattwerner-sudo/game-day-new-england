@@ -2543,4 +2543,82 @@ it renders with the right venue/time. `tsc --noEmit` clean.
 cache only the smaller `today`/`weekend`/`week` ranges, or select fewer columns) - not a blanket
 wrapper over an unbounded result set again.
 
-Committed locally (`0239b2f`) - not yet pushed.
+Committed locally (`0239b2f`) - pushed later this same session alongside Section 43's Hudl work.
+
+## 43. Session log: 2026-08-13 (continued) — in-app video embedding for Hudl and YouTube;
+Head of the Charles data cleanup; ticket link added
+
+**Founder asked whether ticket/streaming links could be embedded in-app** (again, revisiting
+Section 41's finding) - this time asking specifically about Hudl after noticing a real
+`vcloud.hudl.com/broadcast/embed/...` URL in the data, and separately about YouTube. Checked
+both for real via direct header requests, the same rigor as Section 41's original check, not
+assumed from general platform reputation:
+- **Hudl** vCloud embed pages send no `X-Frame-Options`/CSP `frame-ancestors`, and set their
+  session cookie `SameSite=None` (only meaningful for a cookie meant to work cross-origin in an
+  iframe) - genuinely built to be embedded. Confirmed the page itself is a real Volar/BlueFrame
+  player (`body class="embed"`, `page_type: 'Embed'`), not a redirect or error page.
+- **YouTube**'s `/embed/` endpoint is the same - no blocking headers, a documented public
+  feature. The real constraint turned out to be data shape, not the platform: roughly half of
+  all `streamingVideoUrl` values that mention YouTube are a channel or `/streams` tab link (a
+  school's own `@handle`), not one specific video - nothing concrete to embed. Only
+  `watch?v=`/`live/`/`youtu.be/` URLs carry an actual video ID.
+
+Added `src/lib/embed.ts` (`resolveEmbed()`) and wired it into `events/[id]/page.tsx`: when a
+game's `streamingVideoUrl` resolves to a real embeddable URL, it renders inline via `<iframe>`
+(`aspect-video`, autoplay+fullscreen allowed) instead of the external "Watch" link-out button.
+Every other provider (ESPN+, Hometown Ticketing, Etix, FloSports, NSN, channel-only YouTube
+links, etc.) is untouched - still links out, since those are genuinely blocked or ambiguous.
+Verified against real events in-browser (Saint Anselm tennis via Hudl, a swimming meet via
+YouTube) and confirmed the ESPN+ link-out path still works unchanged. List page (`page.tsx`)
+deliberately left as link-only, not embedded - many event cards on one page is the wrong place
+for autoplay-capable video players.
+
+**Head of the Charles**, at founder's request: confirmed it was in the data, then found the
+regatta had fragmented into 8 separate 2025 rows (one real annual event, but each participating
+school's own feed phrased/dated/gendered it slightly differently, so `upsertSpecialEvent`'s
+dedupe-by-exact-match never merged them). Deleted the 8 stale 2025 rows, kept and normalized the
+single 2026 entry's name to "Head of the Charles Regatta", and added a real ticket link (the
+official Tickettailor page for the Eliot Bridge Enclosure/Directors' Lounge, found via direct
+web research - general riverside viewing itself is free, not ticketed). Flagged but did not
+fix: the same per-school-naming fragmentation will likely recur as more schools' 2026 feeds get
+re-ingested this season - a one-time cleanup, not a structural fix.
+
+`tsc --noEmit` clean throughout. Committed and pushed (`2d8e087`, `53b2802`, and Section 42's
+`0239b2f`/`8646c5e`).
+
+## 44. Session log: 2026-08-13 (continued) — 1,572 orphaned pre-fix "TBD" rows purged
+
+**Founder spotted a real "TBD at University of Vermont" game live on the deployed site.**
+Traced it to a genuine, much bigger bug than one bad row: `computeDedupeKey()` had `gender`
+added to it at some point earlier this project (a documented fix for dual-meet men's/women's
+games silently overwriting each other - see `src/ingestion/sidearm/normalize.ts`'s comment on
+that function). Since `upsertEvent()` only ever matches by exact `dedupeKey`, every row inserted
+*before* that fix became permanently orphaned the moment it shipped - current ingestion always
+computes the new 4-segment key (`datetime|home|away|gender`), so it can never find or update an
+old 3-segment row again, no matter how many times ingestion re-runs.
+
+Confirmed via direct query, not assumption: of 1,572 upcoming games showing "TBD" on one side
+with zero identifying opponent info (`awayTeamId`/`homeTeamId` AND `opponentNameRaw` all null),
+**100% used the old dedupe-key shape** - none were the current format. 134 of those already had
+a fully-correct duplicate row elsewhere (like the founder's Vermont/Sacred Heart example -
+`upsertEvent` had already created a fresh, correct row under the new key alongside the dead
+orphan); the rest didn't have a twin yet, most likely because the opponent school's own feed
+hadn't been re-ingested since the fix landed, not because the game itself was unresolvable.
+Either way, these rows could never self-heal - only get deleted or sit there confusing users
+forever.
+
+Deleted all 1,572 via a one-off script (`cleanup_orphans.ts`, not kept in the repo - matches
+the project's established throwaway-diagnostic-script pattern). **Founder ran it directly** -
+Claude Code's own auto-mode safety classifier blocked the bulk DELETE against production data
+when attempted via the agent's own Bash tool, correctly treating a 1,572-row production delete
+as requiring a human's own hand on it rather than the agent executing it autonomously, even with
+explicit founder sign-off on the plan. Verified after: 0 broken rows remain, the founder's exact
+example now correctly shows "Sacred Heart University at University of Vermont" (a healthy row
+that had been sitting right alongside the dead one the whole time), `tsc --noEmit` clean,
+re-verified live in-browser.
+
+**No code change here** - this was a one-time data cleanup for rows created before the gender-
+key fix. Any *new* orphans of this shape shouldn't be possible going forward since the dedupe
+key format itself hasn't changed again - but if a similar dedupe-key-shape change is ever made
+again, the same class of orphan will recur unless a cleanup step is included as part of that
+change, not left as a follow-up.
