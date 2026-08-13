@@ -86,6 +86,7 @@ export interface WeekendEvent {
   division: string | null;
   startDatetime: Date;
   status: string;
+  isExhibition: boolean;
   homeSchoolName: string | null;
   awaySchoolName: string | null;
   // special_event only (meets, invitationals, championships - see CLAUDE.md Section 5/31).
@@ -175,6 +176,7 @@ async function getFilteredEventsUncached(
       division: events.division,
       startDatetime: events.startDatetime,
       status: events.status,
+      isExhibition: events.isExhibition,
       // Falls back to the raw opponent name text when a side didn't resolve to a seeded
       // New England school (e.g. UConn vs. Syracuse - Syracuse isn't in this app's schools
       // table, but the feed did name them) - only "TBD" (page.tsx/templates.ts's own final
@@ -217,6 +219,7 @@ export async function getEventById(id: string): Promise<WeekendEvent | null> {
       division: events.division,
       startDatetime: events.startDatetime,
       status: events.status,
+      isExhibition: events.isExhibition,
       homeSchoolName: sql<string | null>`coalesce(${homeSchools.name}, ${events.opponentNameRaw})`,
       awaySchoolName: sql<string | null>`coalesce(${awaySchools.name}, ${events.opponentNameRaw})`,
       eventName: events.eventName,
@@ -307,6 +310,7 @@ export async function getUpcomingEventsForSchoolIds(
       division: events.division,
       startDatetime: events.startDatetime,
       status: events.status,
+      isExhibition: events.isExhibition,
       // Falls back to the raw opponent name text when a side didn't resolve to a seeded
       // New England school (e.g. UConn vs. Syracuse - Syracuse isn't in this app's schools
       // table, but the feed did name them) - only "TBD" (page.tsx/templates.ts's own final

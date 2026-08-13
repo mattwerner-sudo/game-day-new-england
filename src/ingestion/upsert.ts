@@ -125,6 +125,7 @@ export interface EventUpsertInput {
   radioNetwork?: string | null;
   streamingAudioUrl?: string | null;
   opponentNameRaw?: string | null;
+  isExhibition?: boolean;
 }
 
 /**

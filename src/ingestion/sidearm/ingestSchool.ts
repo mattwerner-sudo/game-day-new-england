@@ -137,7 +137,7 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
       }
       const loc = parseLocation(game.location);
       const isHome = !loc.city || (loc.city === school.city && loc.state === school.state);
-      matchup = { isHome, opponentName: candidateName };
+      matchup = { isHome, opponentName: candidateName, isExhibition: false };
     }
 
     const { venueName, city, state } = parseLocation(game.location);
@@ -209,6 +209,7 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
       sourceEventId: game.uid,
       dedupeKey,
       opponentNameRaw: opponent ? null : opponentName,
+      isExhibition: matchup.isExhibition,
       ...linkFields,
     });
 

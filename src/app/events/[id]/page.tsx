@@ -101,9 +101,16 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
         </Link>
 
         <div className="mt-4 flex items-center justify-between gap-3">
-          <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">
-            {formatGender(event.gender)} {formatSport(event.sport)}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="inline-flex items-center rounded-full bg-orange-50 px-2.5 py-0.5 text-xs font-medium text-orange-700 dark:bg-orange-950 dark:text-orange-300">
+              {formatGender(event.gender)} {formatSport(event.sport)}
+            </span>
+            {event.isExhibition && (
+              <span className="inline-flex items-center rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+                Exhibition
+              </span>
+            )}
+          </div>
           {event.status !== "scheduled" && (
             <span className="text-xs font-medium uppercase text-zinc-500 dark:text-zinc-400">
               {event.status}

@@ -29,9 +29,10 @@ export function digestSms(schoolNames: string[], events: WeekendEvent[], manageT
   const maxLines = 4;
   const lines = events.slice(0, maxLines).map((e) => {
     const matchup =
-      e.type === "special_event"
+      (e.type === "special_event"
         ? e.eventName ?? "Meet"
-        : `${e.awaySchoolName ?? "TBD"} at ${e.homeSchoolName ?? "TBD"}`;
+        : `${e.awaySchoolName ?? "TBD"} at ${e.homeSchoolName ?? "TBD"}`) +
+      (e.isExhibition ? " (Exh)" : "");
     const when = e.startDatetime.toLocaleString("en-US", {
       weekday: "short",
       hour: "numeric",

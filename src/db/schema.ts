@@ -99,6 +99,13 @@ export const events = pgTable(
     startDatetime: timestamp("start_datetime", { withTimezone: true }).notNull(),
     endDatetime: timestamp("end_datetime", { withTimezone: true }),
     status: text("status").notNull().default("scheduled"), // scheduled|postponed|cancelled|final
+    // A game *type* (still "scheduled" like any other game), not a status - a postponed
+    // exhibition game needs to represent both facts at once, which overloading `status`
+    // couldn't do. Confirmed real, two distinct SIDEARM summary formats (UConn men's vs
+    // women's basketball feeds): "vs Syracuse - Hall of Fame Exhibition" (suffix) and
+    // "vs Syracuse (exh.)" (parenthetical) - previously silently dropped/left baked into the
+    // opponent name rather than surfaced as a real, filterable fact about the game.
+    isExhibition: boolean("is_exhibition").notNull().default(false),
     ticketUrl: text("ticket_url"),
     isFree: boolean("is_free"),
     sourceUrl: text("source_url"), // home school's own game-detail page - always-available

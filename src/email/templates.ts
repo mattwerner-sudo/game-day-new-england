@@ -34,9 +34,10 @@ export function digestEmail(
       // special_event rows (meets/championships) have no home/away side - fall back to
       // eventName + whichever participating schools we know about, same as the homepage.
       const matchup =
-        e.type === "special_event"
+        (e.type === "special_event"
           ? `${e.eventName ?? "Meet"} (${e.participatingSchoolNames.join(", ") || "schools TBD"})`
-          : `${e.awaySchoolName ?? "TBD"} at ${e.homeSchoolName ?? "TBD"}`;
+          : `${e.awaySchoolName ?? "TBD"} at ${e.homeSchoolName ?? "TBD"}`) +
+        (e.isExhibition ? " (Exhibition)" : "");
       const when = e.startDatetime.toLocaleString("en-US", {
         weekday: "short",
         month: "short",

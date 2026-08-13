@@ -316,6 +316,7 @@ export function parseStreamingInfo(description: string | null): ParsedStreamingI
 export interface ParsedMatchup {
   isHome: boolean;
   opponentName: string;
+  isExhibition: boolean;
 }
 
 /**
@@ -323,13 +324,27 @@ export interface ParsedMatchup {
  * Operators sometimes tack a promo suffix onto the opponent, e.g.
  * "vs Southern Connecticut State - Family Weekend" - cut at " - " since real
  * opponent names in this data never contain that pattern.
+ *
+ * Exhibition status is real, confirmed data worth keeping rather than silently dropping along
+ * with that suffix - two distinct formats found in real feeds (UConn men's vs women's
+ * basketball): a " - " suffix ("vs Syracuse - Hall of Fame Exhibition", also seen with a real
+ * source typo, "PRESEASON EXHIBITON") and a parenthetical directly on the opponent name
+ * ("vs Syracuse (exh.)"). Both are detected and stripped from the opponent name here rather
+ * than left to pollute the display name or get silently lost.
  */
 export function parseMatchup(summary: string): ParsedMatchup | null {
   const match = summary.match(/\s+(vs\.?|at)\s+(.+)$/i);
   if (!match) return null;
+
+  const [namePart, suffixPart] = match[2].split(/\s+-\s+/);
+  const suffixIsExhibition = suffixPart ? /exhib/i.test(suffixPart) : false;
+
+  const parenMatch = namePart.trim().match(/^(.+?)\s*\((?:exh\.?|exhibition)\)$/i);
+
   return {
     isHome: match[1].toLowerCase().startsWith("vs"),
-    opponentName: match[2].split(/\s+-\s+/)[0].trim(),
+    opponentName: (parenMatch ? parenMatch[1] : namePart).trim(),
+    isExhibition: suffixIsExhibition || Boolean(parenMatch),
   };
 }
 

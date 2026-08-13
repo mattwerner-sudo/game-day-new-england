@@ -2450,3 +2450,53 @@ locally, since the underlying per-school logic was already proven both by this s
 extensively all session. `tsc --noEmit` clean. **`CRON_SECRET` still needs to be set in Vercel's
 environment variables** for this to actually run in production - same founder-action category as
 the Resend/Twilio/Neon gaps, flagged here rather than assumed done.
+
+## 41. Session log: 2026-08-13 — production config gaps fixed (NEXT_PUBLIC_BASE_URL missing),
+exhibition games flagged
+
+Founder set `CRON_SECRET`, `RESEND_API_KEY` in Vercel. Live-checked the result rather than
+assuming: found `NEXT_PUBLIC_BASE_URL` was never set in Vercel, so `robots.txt`/`sitemap.xml`
+and - more seriously - the email/SMS confirmation links were all pointing at
+`http://localhost:3000` in production. Real, live bug affecting actual signups, not a nicety.
+Founder fixed it; re-verified live afterward (sitemap/robots now show real URLs).
+
+**Founder asked whether ticket/streaming links could be embedded in-app instead of linking
+out.** Tested for real - pulled real ticket/stream URLs from the DB, checked response headers
+directly (not guessed). Findings: Hometown Ticketing sends `X-Frame-Options: SAMEORIGIN`
+(explicit block); Etix sits behind the same AWS WAF bot-challenge pattern as PrestoSports;
+ESPN's CSP `frame-ancestors` whitelists only ESPN/Disney domains. NSN (~50% of all streaming
+links) and FloSports don't block the page technically but are subscription-gated regardless.
+Concluded this isn't achievable as a general feature - real payment/DRM/ToS blockers, not just
+engineering, and reverses Section 3's explicit Day-1 "not a ticketing company" scope call.
+**Founder then asked to keep pushing past these protections - declined.** Circumventing
+anti-bot/anti-embedding measures on third-party production systems without authorization isn't
+something to do regardless of business motivation; also flagged the real fraud/liability
+exposure of a real payment page loading inside this app's iframe even if it were technically
+possible. Recommended the NSN partnership angle (Section 0.9) as the legitimate path instead.
+
+**Exhibition-game status**, the one remaining non-founder-blocked item from the standing
+punch list. Confirmed real, two distinct SIDEARM summary formats before writing anything (UConn
+men's vs women's basketball feeds): a " - " suffix ("vs Syracuse - Hall of Fame Exhibition",
+also a real source typo "PRESEASON EXHIBITON") and a parenthetical directly on the opponent
+name ("vs Syracuse (exh.)"). Previously both were either silently dropped or left baked into
+the opponent name rather than surfaced as a real fact about the game. **Zero evidence of this
+pattern in Presto's data** (checked directly) - only fixed for SIDEARM, not guessed at for
+Presto.
+
+New `events.is_exhibition` boolean (migration `drizzle/0011_green_corsair.sql`) - a game *type*,
+deliberately not folded into `status`, since a postponed exhibition game needs to represent
+both facts at once. `parseMatchup()` now detects and strips both real formats from the opponent
+name and returns `isExhibition` alongside the existing fields. Threaded through
+`EventUpsertInput` (optional, Presto omits it and gets the DB default of `false`), the query
+layer, an "Exhibition" badge on both the homepage card and the event detail page, and inline in
+both the email and SMS digest templates.
+
+Verified against real data: re-ingested UConn's actual men's/women's basketball feeds, confirmed
+4 real exhibition games correctly flagged (`Syracuse`, `Purdue`, `Texas`) with clean opponent
+names (no more `"Syracuse (exh.)"` baked into the display name). Browser-verified the badge
+renders correctly. Along the way, confirmed 2 of those 4 have `TBD`/`TBA` venues with no
+state, so they're correctly excluded from the homepage by the existing New-England-scope
+filter - pre-existing, expected behavior, not something this work touched. `tsc --noEmit`
+clean throughout.
+
+**Local-only as of this entry - not yet pushed to Neon.**
