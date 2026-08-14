@@ -2804,3 +2804,152 @@ pattern as Section 44's bulk delete). Committed (`50c6791`).
 - **The deployed app code was out of sync with the Neon schema between the migration landing
   and this commit being pushed** - the live site's old code still queried the now-gone `fans`
   table during that window. Flagged to the founder; resolved once this commit is pushed.
+
+## 47. Session log: 2026-08-14 (continued) — in-app ticket purchasing (Vivenu), and
+subscriptions: games, schools, leagues, teams, special venues
+
+**Founder asked for two things in one request**: (1) research and pressure-test whether ticket
+purchasing can be embedded in-app, the same way Hudl/YouTube video embedding already works
+elsewhere in this codebase, and (2) let users subscribe to specific games, schools, leagues,
+teams, and venues, with a full alerting/management build-out to match.
+
+### Ticket embedding (commit `a95a6ce`)
+
+Checked real `ticketUrl` values already in the data against their actual page headers, not
+assumed from vendor names. The large majority - `*.evenue.net` (Ticketmaster-Evenue, the single
+biggest vendor by volume at 403 URLs), Hometown Ticketing (including its own `/embed/` path),
+Ticketmaster direct, and several `tickets.*.edu` vendors - all send `X-Frame-Options`/CSP
+`frame-ancestors` that block iframing outright. One real exception found: several schools
+(Saint Anselm, Bryant, Merrimack) use **Vivenu**, a white-labeled platform on school-branded
+domains (`tickets.saintanselmhawks.com`, `bryanttickets.com`, `tickets.merrimackathletics.com`),
+identified via page source (`vivenu GmbH` meta tag) and cookie signature (`vi_wq`, `__cf_bm`
+with `SameSite=None`). Confirmed genuinely embeddable two ways: direct header check (no blocking
+headers), and an actual rendered iframe test serving the full purchase flow end to end (event
+details → seat selection → cart), all inside the iframe. Test file had to live inside the
+project (`public/iframe_test.html`, served through the real dev server, deleted after) rather
+than the scratchpad - files outside the project directory render sandboxed with an aggressive
+CSP in the browser preview tool, which was masking the real embeddability result at first.
+
+Implemented as an explicit domain allowlist (`VIVENU_TICKET_DOMAINS`, `resolveTicketEmbed()` in
+`src/lib/embed.ts`), deliberately not a heuristic/pattern match - some *blocked* vendors share
+naming patterns with the working ones (`tickets.brown.edu`/`tickets.dartmouth.edu` share the
+`tickets.` prefix with the real Vivenu domains but are blocked), so pattern-matching would
+silently embed something broken. `events/[id]/page.tsx` renders a bordered iframe when
+`resolveTicketEmbed(event.ticketUrl)` resolves, otherwise falls back to the existing external
+"Buy Tickets" link unchanged. Tests added for exact matches, an unverified similarly-named
+vendor (regression guard against the "tickets." heuristic), other known-blocked vendors, and a
+malformed URL.
+
+### Subscriptions: games, schools, leagues, teams, special venues (commit `8d5ef7a`)
+
+Schools were already followable (`fanFollows`, built alongside the Better Auth accounts system
+earlier this session - see Section 46). Founder wanted four more types. Scope was negotiated
+live: first asked to drop venue-follows entirely ("I actually don't think I need a venue
+subscription"), then reversed to re-add them but scoped specifically to notable pro/public
+venues ("only special venues... pro sports venues or public venues"), not a blanket
+follow-any-venue feature. UI scope was resolved in favor of the lean option: no new page types
+(no `/leagues/[name]`), just pickers on `/manage` plus one-click contextual follow buttons on the
+event detail page.
+
+**Two real data findings shaped the design, both checked directly rather than assumed:**
+- No `leagues` table exists - "league" is plain text, duplicated across `schools.conference`
+  (default) and `teams.conference` (nullable per-sport override), reconciled at query time via
+  `coalesce(teams.conference, schools.conference)` - already how the homepage's league filter
+  works. A league follow is a stored **text value**, not an FK.
+- First hypothesis for identifying "special venues" - `venues.schoolId IS NULL` - was checked
+  directly and was **wrong**: 2,447 of 2,950 NE venues have a null `schoolId`, and a sample was
+  almost entirely golf courses, bare city-name fallback rows, and unmatched away-team venues,
+  not notable venues. Abandoned before building anything on it. Second check - searching for
+  known real pro/public venue names (TD Garden, Gillette Stadium, Fenway Park, etc.) - found
+  they genuinely exist in the data, but each is **fragmented across multiple `venues` rows**:
+  `upsertVenue`'s dedupe key includes `schoolId` (so each hosting school's feed creates its own
+  row for the same physical venue), and different schools' feeds spell the same venue
+  inconsistently ("Dunkin' Park"/"Dunkin Donuts Park"/"Dunkin' Donuts Park", "Amica Mutual
+  Pavilion"/"Amica Mutual Pavillion" misspelling, "MassMutual Center"/"MassMutual Center |
+  Springfield"). The exact same class of problem already solved once this session for Head of
+  the Charles special-event data. Consequence: a venue follow can't be a raw `venues.id` - it has
+  to be matched by a canonical name, same as a league follow.
+
+**New `src/db/specialVenues.ts`** - a small, hand-maintained curated list (`SPECIAL_VENUES`, 11
+entries: TD Garden, Gillette Stadium, Fenway Park, Mohegan Sun Arena, Amica Mutual Pavilion,
+Dunkin' Park, MassMutual Center, Cross Insurance Arena, DCU Center, Tsongas Center, XL Center),
+each with its known real spelling variants, plus `normalizeVenueNameKey()` (lowercase, strip
+punctuation, strip trailing `| City` garbage) and `resolveSpecialVenue()`. Mirrors the existing
+`conferenceOverrides.ts`/`SCHOOL_NAME_ALIASES` pattern of reconciling real-world feed messiness
+with a small hardcoded list rather than generic fuzzy matching. 7 unit tests cover exact
+matches, real variants, the `| City` suffix case, an ordinary venue returning null, and null
+input.
+
+**Schema** (`0014_boring_wallow.sql`): three new FK-backed tables mirroring `fanFollows` -
+`teamFollows`, `gameFollows` (both cascade-delete on the team/event FK, not just `userId` - this
+project has repeatedly bulk-deleted `teams` and `events` rows during data-quality passes, and an
+uncascaded FK would break the next such cleanup the moment it touched a followed row) - plus two
+text-keyed tables with no FK, `leagueFollows` (league name) and `specialVenueFollows` (canonical
+venue name from `SPECIAL_VENUES`). Confirmed via `grep -n "check(" src/db/schema.ts` (0 matches)
+that this codebase has zero precedent for a polymorphic/CHECK-constraint table, so four
+single-purpose siblings was the right shape, not one generalized table. `consentEvents` gained
+two nullable columns (`subjectType`, `subjectIds: text[]`) rather than reusing `schoolIds`
+(`uuid[]`, incompatible with league/venue name strings) - the 5 existing consent actions/callers
+are untouched, a new `logFollowConsentEvent()` handles the 5 new follow/unfollow actions.
+`users.id` is Better Auth's own generated `text` id, not `uuid` - every new FK to `users`
+reflects that.
+
+**Query layer** (`src/db/queries.ts`, `src/fans/queries.ts`): `getUpcomingEventsForSchoolIds`
+replaced with `getUpcomingEventsForFollows(criteria: FollowCriteria)`, one `or()`-joined query
+covering all 5 criteria types at once (schools, teams, leagues via the same `coalesce()`
+pattern, special venues via a `resolveSpecialVenueIds()` pre-step that scans `venues` and
+matches names through `resolveSpecialVenue()`, and specific games) - matches the existing
+`getFilteredEventsUncached` multi-condition shape rather than running parallel queries and
+merging in JS. Full parallel set of `add*`/`unfollow*`/`getFollowed*`/`isFollowing*` functions
+added per type in `src/fans/queries.ts`, plus the previously-missing `unfollowSchool` (v1 shipped
+without per-school unfollow).
+
+**UI**: `events/[id]/page.tsx` gained a session check and up to 5 quick-follow buttons (away
+team, home team, per-league, special venue - only rendered when `resolveSpecialVenue(venueName)`
+resolves, so the ~2,940 ordinary campus venues get no venue button at all - and the game itself),
+each a plain `<form method="POST">` posting to the new `src/app/api/follow/route.ts`, matching
+this codebase's established discipline of keeping client-side React state contained to exactly
+`SignUpForm.tsx`/`SignInForm.tsx`. The route takes a `type`/`id`/`action`/`redirectTo` form
+dispatch (mirrors `api/unsubscribe/route.ts`'s existing `scope`-field precedent), with an
+open-redirect guard on the user-controlled `redirectTo`. `/manage` was reworked with a
+session-preferred, token-fallback auth split: the original token-only path (read + unsubscribe,
+no login required) is byte-for-byte unchanged, preserving the CAN-SPAM guarantee that
+unsubscribing shouldn't require signing in; a real Better Auth session unlocks 5 followed-item
+sections plus add-follow pickers (schools/leagues flat `<select>`s, special venues a static
+11-entry list, teams grouped with `<optgroup label={schoolName}>` - confirmed necessary at real
+scale, 2,453 teams). `scripts/send-alerts.ts` rewritten to gather all 5 followed types via
+`Promise.all` and pass them into `getUpcomingEventsForFollows`; the digest label list becomes a
+flat mix of school names, `"{School} {Gender} {Sport}"` per team, league names, venue names, and
+a `"N followed games"` summary - no template restructuring needed since both `digestEmail`/
+`digestSms` already just take a flat label array. A followed game rides the existing weekly
+digest window via `eventIds` rather than getting its own cadence - a closer-to-game-day reminder
+is real but deferred future work.
+
+**One apparent bug during live testing turned out to be a testing artifact, not a real
+defect**: a league-follow click didn't persist on the first try during rapid-fire live browser
+testing, despite the server returning a clean 303 and team/venue/game follows working correctly
+via the identical code path. Investigated rather than patched blind: confirmed `addLeagueFollows`
+works correctly called directly, confirmed the rendered form's hidden inputs were exactly
+correct via DOM inspection, then ran one clean isolated retest (single read → single click →
+screenshot) which succeeded and persisted correctly. No code was changed in response - the
+original failure was concluded to be a stale-ref/race artifact of overlapping tool calls in that
+testing session, not a defect, and all later testing confirmed correct behavior.
+
+**Verified against Neon directly** (via the existing `.env.local`), the established fallback
+given local PGlite's fragility and its seed script's schools/sports-only coverage (no
+events/teams/venues, insufficient for testing this feature). Hit the same pre-existing PGlite
+corruption once more (`RuntimeError: Aborted()` on a plain migration run, no concurrent process)
+- rebuilt with the standard `rm -rf .pglite && migrate.ts && seed.ts` recovery, not a new issue.
+Live-tested a special-event game (no teams, Gillette Stadium) and a normal 2-team game end to
+end, including a targeted script confirming `getUpcomingEventsForFollows` positively matches all
+4 non-school criteria types. `tsc --noEmit` and `npm test` (80/80) both clean. Test data fully
+cleaned up (0 rows across all 4 new follow tables after deleting the test account).
+
+**Migration already applied directly to Neon during verification** (the agent's own Bash tool
+went through this time, unlike Section 44's blocked bulk-delete attempt) - meaning the new follow
+tables exist in production now, ahead of the app code that references them being deployed. Same
+"code lags database" gap already flagged and resolved once for the Better Auth build; low-risk
+here since no deployed UI currently queries these tables, but open until pushed.
+
+**Not yet pushed**: `a95a6ce` (ticket embedding) and `8d5ef7a` (subscriptions) are local-only as
+of this entry.
