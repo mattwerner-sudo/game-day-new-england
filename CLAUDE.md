@@ -331,6 +331,79 @@ Both are genuinely new build items, not extensions of the four planned surfaces 
 here specifically so scoping work for either doesn't get conflated with the school portal/sponsor
 dashboard/NIL marketplace roadmap.
 
+### 0.11 Near-term revenue streams before the Sponsor Dashboard/NIL Marketplace (added 2026-08-15)
+
+Founder question: how does this make money, and specifically what's *repeatable/forecastable* -
+not just the biggest eventual number. The plan's own three unbuilt surfaces (4.2-4.4) are all
+real but distant - none is live, and 0.8 already flags "sponsors will pay attributed prices" and
+"fans will register" as unproven Class B assumptions, not fact. This section records cheaper,
+faster options to test revenue before committing to any of the three big builds, modeled on
+proven directory/aggregator/newsletter monetization patterns from outside this codebase.
+
+**Ranked by build cost (cheapest first), each tied to a real external comparable:**
+
+1. **Newsletter sponsor slot** - one flat "presented by" line in the existing digest email/SMS
+   (`scripts/send-alerts.ts`, already built and sending). No new infra - the Morning Brew/theSkimm
+   model, sold manually to one local business as a pilot before any self-serve tooling exists.
+   Cheapest possible test of "will a local business actually pay."
+2. **Ticket affiliate commission** - this repo already embeds/links tickets (Vivenu embed,
+   Section 47; outbound links to Ticketmaster-Evenue, Hometown Ticketing, etc. for everyone else).
+   Most ticketing platforms run affiliate programs; tagging existing outbound links needs no
+   product work at all. The standard event-aggregator monetization model (how sites that don't
+   sell their own ticket inventory make money).
+3. **Fan gear affiliate links** - a Fanatics/school-bookstore affiliate link next to team/school
+   names. How sports blogs (SB Nation-era) monetized content before any ad-sales function
+   existed. Trivial to add, no dependency on audience size to start earning something.
+4. **"Powered by" schedule widget, licensed to schools** - a much smaller slice of the School
+   Portal idea (4.2): an embeddable schedule widget sold for a flat monthly fee to one AD, instead
+   of building the full free-forever portal. Proven B2B pattern (subscription-priced embeddable
+   widgets); closer to "generate an iframe URL per school" than a dashboard.
+5. **Paid coaching/staff job listings** - real, proven niche-directory model (industry job boards
+   monetize an audience of insiders, e.g. NCSA-style sports recruiting/coaching boards). This repo
+   already has a live relationship with 100 athletic departments via ingestion - sellable without
+   touching the fan-facing product at all.
+6. **Featured/pinned placement** - Yelp/Zillow-style paid boost for a camp, clinic, or program.
+   Adjacent to the plan's own "Prospect Mode" idea (0.6, currently deferred to Y3+) but a
+   single-paid-badge version is buildable in days, not the full recruiting marketplace.
+
+**Direct comparables worth naming**: MaxPreps built a real, eventually-acquired business on ads
+plus a premium stats/recruiting subscription over the same "high school sports aggregator" shape
+this repo has. NFHS Network proves schools *and* fans will pay directly for streaming
+infrastructure - relevant since this repo already embeds streams (Hudl, NEC Front Row - Section
+48). The cautionary comparable is Patch.com - hyperlocal display-ad sales at real scale is
+genuinely hard, which is exactly why 0.8 already flags Tier 1/2 sponsor sales as "software is the
+smaller half of the problem," not a pure engineering lift.
+
+**Recommended sequencing**: run #1 as the actual pilot (near-zero cost, directly tests the core
+unproven assumption). Layer in #2/#3 in parallel since they need no sales motion at all, just
+plumbing. Hold #4-6 until #1 shows real conversion - no reason to build more before the cheapest
+test has an answer.
+
+**Newsletter platform question: would Kit, Beehiiv, or Substack work?** Evaluated and **no, not
+as a replacement for the existing digest** - `send-alerts.ts` sends a genuinely **personalized**
+email per user, computed from a live relational query (each user's actual follows joined against
+real upcoming events, Section 47's `getUpcomingEventsForFollows`). Kit/Beehiiv/Substack are built
+to compose one issue and send it to a list or a few tag-based segments - none of them can
+generate a uniquely-computed body per subscriber from an external database the way this repo's
+own Resend-based system already does. Migrating the existing digest to any of the three would be
+a real downgrade, not a simplification.
+
+Where they *would* be a real fit: a separate, new, **broadcast-style** product - a general "this
+week in New England college sports" roundup sent identically to every subscriber, independent of
+individual follows. That's a genuinely different product from the personalized digest, not a
+replacement for it. Of the three, **Beehiiv is the better fit if that gets built**: it has a
+native ad network that matches sponsors to newsletters automatically by content vertical and
+subscriber count, which is the only one of the three offering real ad-sponsorship monetization
+without doing manual sales - directly relevant to the "repeatable revenue" question. Substack is
+subscription/paywall-first (~10% platform cut on reader payments) - a paywalled newsletter cuts
+directly against this product's own free-discovery thesis (0.2, 0.8), so it's a worse fit
+specifically for GDNE even though it's a fine platform generally. Kit is strongest at
+creator automation/funnels (courses, memberships) but has no comparable built-in ad marketplace -
+no real advantage over the existing in-house Resend setup for this use case.
+**Caveat**: Beehiiv's ad-network payouts scale with real subscriber count and opens - it's a
+lever worth pulling once a broadcast newsletter has real list size, not a first-dollar solution;
+the manual sponsor-slot pilot (#1 above) is still the faster path to a first real dollar.
+
 ---
 
 ## 1. What this is
