@@ -3141,3 +3141,52 @@ immediately after. `tsc --noEmit` clean, full suite 89/89 passing.
 **Not yet committed as of this entry** - schema/ingestion changes (2 new schools' worth of real
 event data now in Neon) plus the `embed.ts`/`embed.test.ts`/`events/[id]/page.tsx` code changes,
 alongside this doc update.
+
+## 49. Session log: 2026-08-15 — first two revenue streams from Section 0.11's ranked list built:
+newsletter sponsor slot + ticket affiliate/UTM tagging
+
+Founder confirmed both #1 and #2 from Section 0.11's ranked list ("do #1 as the actual pilot...
+layer in #2/#3 in parallel"). Built the two that don't need a real external account first;
+#3 (gear affiliate links) was deliberately not built this pass - see below.
+
+**Newsletter sponsor slot** (`src/email/templates.ts`, `src/sms/templates.ts`): a single
+`DIGEST_SPONSOR_NAME`/`DIGEST_SPONSOR_URL` env-var pair, hand-edited per pilot deal rather than a
+sponsors table or admin UI - deliberately matches the "unset env var = inert" convention already
+established for `RESEND_API_KEY`/`TWILIO_*`/`GOOGLE_CLIENT_ID` elsewhere in this codebase, so with
+nothing set the digest renders byte-for-byte as before. Email gets a full "This week's digest
+presented by [linked name]" line; SMS gets a shorter "(presented by [name])" - no URL, since SMS
+cost scales per 160-char segment and a manage-url link is already in every digest. Verified via a
+standalone script calling `digestEmail`/`digestSms` directly (no DB, no real send) - confirmed the
+sponsor line renders correctly with the env vars set at process start, and confirmed it's fully
+absent with them unset. (One real mistake caught during this: an earlier version of the
+verification script set `process.env.DIGEST_SPONSOR_NAME` *after* the `import` statement inside
+the same file - ES module imports hoist above all other code regardless of source order, so the
+template module had already read `undefined` before the assignment ran. Not a bug in the actual
+feature, just a reminder that env vars for a module-load-time `const` need to be set before the
+process starts, not mid-script.)
+
+**Ticket affiliate/UTM tagging** (new `src/lib/affiliate.ts`, `withTicketAffiliateTag`): applied
+to both real outbound "Buy Tickets" links in this codebase (`src/app/page.tsx`'s list rows and
+`src/app/events/[id]/page.tsx`'s detail page) - deliberately *not* applied to the Vivenu
+`ticketEmbed` iframe src (Section 47) - an unexpected query param on a live embedded checkout flow
+is a real risk an outbound top-level link isn't. Always appends real, safe, universally-supported
+UTM params (`utm_source=gamedaynewengland` etc.) - this alone already answers the open "does this
+even drive clicks" question from Section 0.11 without needing any real affiliate account. A
+second, optional layer - `TICKET_AFFILIATE_PARAM`/`TICKET_AFFILIATE_VALUE` - only activates once
+those are both set, and is deliberately generic (a param name/value pair) rather than a hardcoded
+per-vendor scheme: no specific vendor's real affiliate program (Ticketmaster-Evenue, Hometown
+Ticketing, etc.) has actually been verified or enrolled in yet - that needs real account
+enrollment, same founder-action bucket as Resend/Twilio, not something this session can fabricate
+safely. 5 new unit tests (`affiliate.test.ts`). Verified live in the browser against two real
+event pages (a Hometown Ticketing link and a UVM SIDEARM ticket link) - confirmed the real
+rendered `<a href>` on both the homepage and the event detail page carries the UTM params.
+
+**Deliberately not built this pass: gear/merch affiliate links (Section 0.11 item #3).** Unlike
+the ticket link, there's no existing UI element this attaches to (no per-team/per-school page or
+"shop" section exists anywhere in this app), and a real affiliate id (Fanatics, or via a network
+like Rakuten/Impact/AWIN) requires actual account enrollment this session can't do. Building a
+placeholder UI section pointed at nothing would be product-design work invented for its own sake,
+not "wiring" - left for a real product decision plus real enrollment, not silently skipped without
+a note.
+
+`tsc --noEmit` clean, full suite 94/94 passing (89 + 5 new). Committed and pushed.

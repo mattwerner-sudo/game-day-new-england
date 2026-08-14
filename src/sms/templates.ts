@@ -2,6 +2,10 @@ import { WeekendEvent } from "@/db/queries";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
 
+// Same sponsor slot/env-var convention as src/email/templates.ts - kept to a name only (no url)
+// here since SMS cost scales per 160-char segment and there's already a manage-url link below.
+const SPONSOR_NAME = process.env.DIGEST_SPONSOR_NAME;
+
 /**
  * Better Auth's phoneNumber plugin's sendOTP callback (src/auth/auth.ts) - a login code, not a
  * marketing message, so it deliberately carries none of confirmationSms's old TCPA marketing
@@ -37,9 +41,10 @@ export function digestSms(schoolNames: string[], events: WeekendEvent[], manageT
   });
   const remaining = events.length - lines.length;
   const more = remaining > 0 ? ` +${remaining} more` : "";
+  const sponsor = SPONSOR_NAME ? ` (presented by ${SPONSOR_NAME})` : "";
 
   return (
-    `Game Day New England: ${events.length} game${events.length === 1 ? "" : "s"} this week for ` +
+    `Game Day New England${sponsor}: ${events.length} game${events.length === 1 ? "" : "s"} this week for ` +
     `${schoolNames.join(", ")}:\n${lines.join("\n")}${more}\nSee all: ${manageUrl}\nReply STOP to cancel.`
   );
 }

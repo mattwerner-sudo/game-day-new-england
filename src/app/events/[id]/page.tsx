@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { getEventById, EventDetail, WeekendEvent } from "@/db/queries";
 import { formatGender, formatSport, formatLocation, formatParticipants, eventTitle } from "@/lib/format";
 import { resolveEmbed, resolveTicketEmbed, resolveNecFrontRowEmbed } from "@/lib/embed";
+import { withTicketAffiliateTag } from "@/lib/affiliate";
 import { auth } from "@/auth/auth";
 import {
   isFollowingTeam,
@@ -303,7 +304,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           <div className="mt-6 flex flex-wrap gap-2">
             {event.ticketUrl && !ticketEmbed && (
               <a
-                href={event.ticketUrl}
+                href={withTicketAffiliateTag(event.ticketUrl)}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700"

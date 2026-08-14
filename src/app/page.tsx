@@ -11,6 +11,7 @@ import {
   EventFilters,
 } from "@/db/queries";
 import { formatGender, formatSport, formatDay, formatTime, formatLocation, formatParticipants } from "@/lib/format";
+import { withTicketAffiliateTag } from "@/lib/affiliate";
 
 export const dynamic = "force-dynamic";
 
@@ -363,7 +364,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
                         <div className="mt-3 flex flex-wrap gap-2">
                           {event.ticketUrl && (
                             <a
-                              href={event.ticketUrl}
+                              href={withTicketAffiliateTag(event.ticketUrl)}
                               target="_blank"
                               rel="noopener noreferrer"
                               className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700"

@@ -6,6 +6,21 @@ const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? "[mailing address not yet
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
 
+// Manual pilot for the newsletter-sponsor revenue stream (CLAUDE.md Section 0.11) - a single
+// flat "presented by" slot, hand-edited via env vars rather than an admin UI or sponsors table.
+// Same "unset env var = inert" convention as RESEND_API_KEY/TWILIO_* elsewhere in this codebase:
+// with nothing set, the digest renders exactly as it did before this existed.
+const SPONSOR_NAME = process.env.DIGEST_SPONSOR_NAME;
+const SPONSOR_URL = process.env.DIGEST_SPONSOR_URL;
+
+function sponsorLine(): string {
+  if (!SPONSOR_NAME) return "";
+  const label = SPONSOR_URL
+    ? `<a href="${SPONSOR_URL}" style="color:#4f46e5;">${SPONSOR_NAME}</a>`
+    : SPONSOR_NAME;
+  return `<p style="color:#666;font-size:13px;margin:4px 0 16px;">This week's digest presented by ${label}</p>`;
+}
+
 function footer(manageToken: string): string {
   const manageUrl = `${BASE_URL}/manage?token=${manageToken}`;
   return `<p style="color:#666;font-size:12px;margin-top:24px;">
@@ -63,6 +78,7 @@ export function digestEmail(
   return {
     subject: `This week: ${events.length} game${events.length === 1 ? "" : "s"} for your followed schools`,
     html: `<p>Upcoming games for ${schoolNames.join(", ")}:</p>
+      ${sponsorLine()}
       <ul>${rows}</ul>
       ${footer(manageToken)}`,
   };
