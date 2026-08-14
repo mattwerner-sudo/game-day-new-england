@@ -14,13 +14,24 @@ function footer(manageToken: string): string {
   </p>`;
 }
 
-export function confirmEmail(schoolNames: string[], confirmUrl: string, manageToken: string): { subject: string; html: string } {
+/**
+ * Better Auth's emailOTP plugin's sendVerificationOTP callback (src/auth/auth.ts) - `type`
+ * distinguishes the three real reasons this fires (sign-in code, verifying a new password-signup
+ * account's email, or a forgot-password code) so the copy can say what the code is actually for,
+ * since a generic "here's a code" email is a real phishing-lookalike risk otherwise.
+ */
+export function otpEmail(code: string, type: "sign-in" | "email-verification" | "forget-password"): { subject: string; html: string } {
+  const purpose =
+    type === "sign-in"
+      ? "sign in to"
+      : type === "email-verification"
+        ? "verify your email for"
+        : "reset your password on";
   return {
-    subject: "Confirm your Game Day New England alerts",
-    html: `<p>Confirm you'd like game alerts for: <strong>${schoolNames.join(", ")}</strong></p>
-      <p><a href="${confirmUrl}">Confirm my email</a></p>
-      <p>If you didn't request this, you can ignore this email.</p>
-      ${footer(manageToken)}`,
+    subject: `${code} is your Game Day New England code`,
+    html: `<p>Use this code to ${purpose} Game Day New England:</p>
+      <p style="font-size:28px;font-weight:bold;letter-spacing:4px;">${code}</p>
+      <p>This code expires shortly. If you didn't request this, you can ignore this email.</p>`,
   };
 }
 

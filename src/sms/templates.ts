@@ -3,19 +3,14 @@ import { WeekendEvent } from "@/db/queries";
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
 
 /**
- * Sent immediately on opt-in - this text itself IS the required TCPA disclosure receipt
- * (sender identity, message frequency, rates, STOP/HELP), not a confirm-to-activate step like
- * email's double opt-in (see setSmsConsent's comment for why: the checkbox submission is
- * already the consent). Deliberately short - a real 2-segment message for a fan following
- * several schools is an acceptable, bounded cost for a one-time send, unlike the recurring
- * digest below where per-segment cost matters more.
+ * Better Auth's phoneNumber plugin's sendOTP callback (src/auth/auth.ts) - a login code, not a
+ * marketing message, so it deliberately carries none of confirmationSms's old TCPA marketing
+ * disclosure language (rates/frequency/STOP/HELP) - that consent is tracked completely
+ * separately via users.smsConsentedAt (see schema.ts's comment on that column) and only applies
+ * once someone opts into game-alert texts specifically, not to using their phone to log in.
  */
-export function confirmationSms(schoolNames: string[], manageToken: string): string {
-  const manageUrl = `${BASE_URL}/manage?token=${manageToken}`;
-  return (
-    `Game Day New England: You're subscribed to text alerts for ${schoolNames.join(", ")}. ` +
-    `Msg freq varies, msg&data rates may apply. Reply STOP to cancel, HELP for help. ${manageUrl}`
-  );
+export function otpSms(code: string): string {
+  return `Game Day New England: your code is ${code}`;
 }
 
 /**

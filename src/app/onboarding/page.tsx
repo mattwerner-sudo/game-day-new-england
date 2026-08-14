@@ -1,9 +1,19 @@
+import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import Link from "next/link";
+import { auth } from "@/auth/auth";
 import { getFilterOptions } from "@/db/queries";
 
 export const dynamic = "force-dynamic";
 
-export default async function FollowPage() {
+// Deliberately a plain server component with a plain <form method="POST"> - no client JS
+// needed for a name field + a multi-select, unlike SignUpForm/SignInForm which need real
+// interactive state for the OTP send/verify steps. Reuses the exact school-picker markup the
+// old /follow page used.
+export default async function OnboardingPage() {
+  const session = await auth.api.getSession({ headers: await headers() });
+  if (!session) redirect("/sign-in");
+
   const { schools } = await getFilterOptions();
 
   return (
@@ -16,23 +26,23 @@ export default async function FollowPage() {
           🏆 Game Day New England
         </Link>
         <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
-          Follow your school
+          One more thing
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Get a weekly email with upcoming games for the schools you follow. No account, no
-          password - just confirm your email and you&apos;re set.
+          Tell us your name and which schools you want game alerts for.
         </p>
 
-        <form method="POST" action="/api/follow" className="mt-6 space-y-4">
+        <form method="POST" action="/api/onboarding" className="mt-6 space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Email
+            <label htmlFor="name" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Name
             </label>
             <input
-              id="email"
-              name="email"
-              type="email"
+              id="name"
+              name="name"
+              type="text"
               required
+              defaultValue={session.user.name}
               className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
             />
           </div>
@@ -73,13 +83,7 @@ export default async function FollowPage() {
               className="mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
             />
             <div className="mt-3 flex items-start gap-2">
-              <input
-                id="smsConsent"
-                name="smsConsent"
-                type="checkbox"
-                value="yes"
-                className="mt-0.5"
-              />
+              <input id="smsConsent" name="smsConsent" type="checkbox" value="yes" className="mt-0.5" />
               <label htmlFor="smsConsent" className="text-xs text-zinc-600 dark:text-zinc-400">
                 Also text me game reminders. By checking this box, I agree to receive automated
                 text messages from Game Day New England about my followed schools&apos; games.
@@ -93,7 +97,7 @@ export default async function FollowPage() {
             type="submit"
             className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
           >
-            Send confirmation email
+            Finish
           </button>
         </form>
       </main>

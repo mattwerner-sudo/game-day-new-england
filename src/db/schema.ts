@@ -136,42 +136,116 @@ export const events = pgTable(
   ]
 );
 
-// Fan-graph MVP (CLAUDE.md Section 0.8): stateless double opt-in, school-level follows only.
-export const fans = pgTable("fans", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  email: text("email").notNull().unique(), // always stored trim().toLowerCase()
-  manageToken: text("manage_token").notNull().unique(), // powers both /confirm and /manage links
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  confirmedAt: timestamp("confirmed_at", { withTimezone: true }),
-  unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
-  // SMS is a genuinely separate consent channel from email, not an extension of it - TCPA
-  // requires distinct, explicit "prior express written consent" for text messages specifically
-  // (can't be bundled into the email opt-in checkbox). phone is E.164-normalized
-  // (src/fans/phone.ts). smsConsentedAt is set the moment the SMS checkbox is submitted (the
-  // checkbox click itself IS the required consent - unlike email, there's no separate
-  // click-to-confirm round trip; the immediate confirmation text serves as the required
-  // disclosure receipt, not a consent gate). smsUnsubscribedAt is set either via the manage
-  // page or a real inbound "STOP" text (src/app/api/sms/inbound/route.ts) - keeping this app's
-  // own state in sync with Twilio's carrier-level opt-out handling, not just relying on Twilio
-  // to silently block future sends.
-  phone: text("phone"),
-  smsConsentedAt: timestamp("sms_consented_at", { withTimezone: true }),
-  smsUnsubscribedAt: timestamp("sms_unsubscribed_at", { withTimezone: true }),
+// Real accounts (Better Auth - src/auth/auth.ts), replacing the old stateless/anonymous `fans`
+// table (CLAUDE.md Section 20's original fan-graph MVP). There were 0 real fan rows at the time
+// of this change, so this was a clean cut, not a data migration.
+//
+// Schema shape for id/timestamp columns on this table and sessions/accounts/verifications below
+// deliberately does NOT follow this file's usual uuid()/withTimezone conventions - confirmed via
+// Better Auth's own schema generator (`npx @better-auth/cli generate`) against the actual
+// installed version that it emits plain text ids (no DB-level default; `advanced.database.
+// generateId: false` does not add one, so forcing uuid()/defaultRandom() here would leave
+// inserts with no id) and plain timestamp (no tz) columns, which is what the library's own
+// internal expiry/session comparisons are written against. These four tables are treated as
+// library-owned schema, matched to the generator's real output rather than this project's own
+// house style.
+export const users = pgTable("users", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull().unique(),
+  emailVerified: boolean("email_verified").notNull().default(false),
+  image: text("image"),
+  createdAt: timestamp("created_at").notNull().defaultNow(),
+  updatedAt: timestamp("updated_at").notNull().defaultNow(),
+
+  // Better Auth's phoneNumber plugin - proves the user owns this number for LOGIN purposes
+  // only. Deliberately a separate fact from smsAlertsPhone/smsConsentedAt below: signing in via
+  // phone OTP is not TCPA consent to receive SMS game-alert marketing, the same distinction the
+  // old fans table drew between confirmedAt (email ownership) and unsubscribedAt (marketing
+  // consent).
+  phoneNumber: text("phone_number").unique(),
+  phoneNumberVerified: boolean("phone_number_verified"),
+
+  // additionalFields (src/auth/auth.ts's `user.additionalFields`), carried over 1:1 from the
+  // old fans table's equivalent columns - kept nullable, matching Better Auth's own generated
+  // shape for these, rather than forcing NOT NULL against a library that partially updates this
+  // row outside this app's own control.
+  manageToken: text("manage_token").unique(), // powers /manage + /api/unsubscribe, no login
+  // required; always populated on user creation via databaseHooks.user.create.before.
+  emailAlertsUnsubscribedAt: timestamp("email_alerts_unsubscribed_at"),
+  smsAlertsPhone: text("sms_alerts_phone"), // E.164, separate from the login phoneNumber above
+  smsConsentedAt: timestamp("sms_consented_at"),
+  smsUnsubscribedAt: timestamp("sms_unsubscribed_at"),
 });
+
+export const sessions = pgTable(
+  "sessions",
+  {
+    id: text("id").primaryKey(),
+    expiresAt: timestamp("expires_at").notNull(),
+    token: text("token").notNull().unique(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+    ipAddress: text("ip_address"),
+    userAgent: text("user_agent"),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+  },
+  (table) => [index("sessions_user_id_idx").on(table.userId)]
+);
+
+export const accounts = pgTable(
+  "accounts",
+  {
+    id: text("id").primaryKey(),
+    accountId: text("account_id").notNull(), // provider's own user id ("credential" for password)
+    providerId: text("provider_id").notNull(), // "credential" | "google"
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    accessToken: text("access_token"),
+    refreshToken: text("refresh_token"),
+    idToken: text("id_token"),
+    accessTokenExpiresAt: timestamp("access_token_expires_at"),
+    refreshTokenExpiresAt: timestamp("refresh_token_expires_at"),
+    scope: text("scope"),
+    password: text("password"), // hashed - only set for providerId="credential"
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [index("accounts_user_id_idx").on(table.userId)]
+);
+
+// Stores email-OTP and phone-OTP codes (both plugins share this one table, keyed by
+// `identifier`) plus email-verification/password-reset tokens - all of Better Auth's short-lived
+// verification records, not just one plugin's.
+export const verifications = pgTable(
+  "verifications",
+  {
+    id: text("id").primaryKey(),
+    identifier: text("identifier").notNull(),
+    value: text("value").notNull(),
+    expiresAt: timestamp("expires_at").notNull(),
+    createdAt: timestamp("created_at").notNull().defaultNow(),
+    updatedAt: timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [index("verifications_identifier_idx").on(table.identifier)]
+);
 
 export const fanFollows = pgTable(
   "fan_follows",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    fanId: uuid("fan_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => fans.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
     schoolId: uuid("school_id")
       .notNull()
       .references(() => schools.id),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("fan_follows_fan_school_idx").on(table.fanId, table.schoolId)]
+  (table) => [uniqueIndex("fan_follows_user_school_idx").on(table.userId, table.schoolId)]
 );
 
 // Append-only consent ledger - never update/delete existing rows. schoolIds snapshots what was
@@ -179,10 +253,10 @@ export const fanFollows = pgTable(
 // fan_follows changes later.
 export const consentEvents = pgTable("consent_events", {
   id: uuid("id").primaryKey().defaultRandom(),
-  fanId: uuid("fan_id")
+  userId: text("user_id")
     .notNull()
-    .references(() => fans.id, { onDelete: "cascade" }),
-  // "registered" | "confirmed" | "unsubscribed" | "sms_registered" | "sms_unsubscribed"
+    .references(() => users.id, { onDelete: "cascade" }),
+  // "registered" | "onboarded" | "unsubscribed" | "sms_registered" | "sms_unsubscribed"
   action: text("action").notNull(),
   schoolIds: uuid("school_ids").array(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -221,14 +295,14 @@ export const fanAlertLog = pgTable(
   "fan_alert_log",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    fanId: uuid("fan_id")
+    userId: text("user_id")
       .notNull()
-      .references(() => fans.id, { onDelete: "cascade" }),
+      .references(() => users.id, { onDelete: "cascade" }),
     eventId: uuid("event_id")
       .notNull()
       .references(() => events.id, { onDelete: "cascade" }),
     channel: text("channel").notNull().default("email"), // "email" | "sms"
     sentAt: timestamp("sent_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (table) => [uniqueIndex("fan_alert_log_fan_event_channel_idx").on(table.fanId, table.eventId, table.channel)]
+  (table) => [uniqueIndex("fan_alert_log_user_event_channel_idx").on(table.userId, table.eventId, table.channel)]
 );

@@ -1,105 +1,69 @@
 import { eq } from "drizzle-orm";
 import { db } from "@/db/client";
-import { fans, fanFollows, consentEvents, schools } from "@/db/schema";
-import { generateToken } from "./tokens";
+import { users, fanFollows, consentEvents, schools } from "@/db/schema";
 
-export interface Fan {
-  id: string;
-  email: string;
-  manageToken: string;
-  confirmedAt: Date | null;
-  unsubscribedAt: Date | null;
-  phone: string | null;
-  smsConsentedAt: Date | null;
-  smsUnsubscribedAt: Date | null;
-}
-
-/** Same insert -> onConflictDoNothing -> select-if-not-returned idiom as upsertTeam. */
-export async function findOrCreateFan(email: string): Promise<Fan> {
-  const normalized = email.trim().toLowerCase();
-
-  const inserted = await db
-    .insert(fans)
-    .values({ email: normalized, manageToken: generateToken() })
-    .onConflictDoNothing()
-    .returning();
-
-  if (inserted[0]) return inserted[0];
-
-  const existing = await db.select().from(fans).where(eq(fans.email, normalized)).limit(1);
-  return existing[0];
-}
-
-export async function findFanByToken(token: string): Promise<Fan | null> {
-  const rows = await db.select().from(fans).where(eq(fans.manageToken, token)).limit(1);
-  return rows[0] ?? null;
-}
-
-export async function addFollows(fanId: string, schoolIds: string[]): Promise<void> {
+/**
+ * findOrCreateFan/findFanByToken/confirmFan are gone - Better Auth (src/auth/auth.ts) now owns
+ * account creation and email verification for all 3 signup methods. What's left here is purely
+ * the follow/consent/unsubscribe layer, now keyed on Better Auth's users.id instead of the old
+ * fans.id.
+ */
+export async function addFollows(userId: string, schoolIds: string[]): Promise<void> {
   if (schoolIds.length === 0) return;
   await db
     .insert(fanFollows)
-    .values(schoolIds.map((schoolId) => ({ fanId, schoolId })))
+    .values(schoolIds.map((schoolId) => ({ userId, schoolId })))
     .onConflictDoNothing();
 }
 
 export async function getFollowedSchools(
-  fanId: string
+  userId: string
 ): Promise<{ id: string; name: string }[]> {
   return db
     .select({ id: schools.id, name: schools.name })
     .from(fanFollows)
     .innerJoin(schools, eq(fanFollows.schoolId, schools.id))
-    .where(eq(fanFollows.fanId, fanId));
+    .where(eq(fanFollows.userId, userId));
 }
 
 export async function logConsentEvent(
-  fanId: string,
-  action: "registered" | "confirmed" | "unsubscribed" | "sms_registered" | "sms_unsubscribed",
+  userId: string,
+  action: "registered" | "onboarded" | "unsubscribed" | "sms_registered" | "sms_unsubscribed",
   schoolIds: string[]
 ): Promise<void> {
-  await db.insert(consentEvents).values({ fanId, action, schoolIds });
+  await db.insert(consentEvents).values({ userId, action, schoolIds });
+}
+
+/** Looked up by the same no-login manage/unsubscribe token the old fans table used. */
+export async function findUserByManageToken(token: string) {
+  const rows = await db.select().from(users).where(eq(users.manageToken, token)).limit(1);
+  return rows[0] ?? null;
+}
+
+export async function unsubscribeEmailAlerts(userId: string): Promise<void> {
+  await db.update(users).set({ emailAlertsUnsubscribedAt: new Date() }).where(eq(users.id, userId));
 }
 
 /**
- * Sets confirmedAt and clears unsubscribedAt - this is also the resubscribe path (a fan who
- * previously unsubscribed and submits /follow again isn't reactivated until they click a
- * fresh confirm link, per CLAUDE.md's explicit resubscribe decision).
- */
-export async function confirmFan(fanId: string): Promise<void> {
-  await db
-    .update(fans)
-    .set({ confirmedAt: new Date(), unsubscribedAt: null })
-    .where(eq(fans.id, fanId));
-}
-
-export async function unsubscribeFan(fanId: string): Promise<void> {
-  await db
-    .update(fans)
-    .set({ unsubscribedAt: new Date() })
-    .where(eq(fans.id, fanId));
-}
-
-/**
- * Unlike email, there's no separate click-to-confirm step - checking the SMS box on /follow
+ * Unlike email, there's no separate click-to-confirm step - checking the SMS box on /onboarding
  * and submitting the form *is* the required "prior express written consent" (TCPA), so this
- * unconditionally (re)sets phone + smsConsentedAt and clears smsUnsubscribedAt every time it's
- * called. A fan resubmitting with a new number, or re-opting-in after a STOP, both go through
- * this same real, explicit action - correct either way, not a shortcut.
+ * unconditionally (re)sets smsAlertsPhone + smsConsentedAt and clears smsUnsubscribedAt every
+ * time it's called. Deliberately a separate fact from users.phoneNumber (login verification) -
+ * see schema.ts's comment on the users table.
  */
-export async function setSmsConsent(fanId: string, phone: string): Promise<void> {
+export async function setSmsConsent(userId: string, phone: string): Promise<void> {
   await db
-    .update(fans)
-    .set({ phone, smsConsentedAt: new Date(), smsUnsubscribedAt: null })
-    .where(eq(fans.id, fanId));
+    .update(users)
+    .set({ smsAlertsPhone: phone, smsConsentedAt: new Date(), smsUnsubscribedAt: null })
+    .where(eq(users.id, userId));
 }
 
-export async function unsubscribeFromSms(fanId: string): Promise<void> {
-  await db.update(fans).set({ smsUnsubscribedAt: new Date() }).where(eq(fans.id, fanId));
+export async function unsubscribeFromSms(userId: string): Promise<void> {
+  await db.update(users).set({ smsUnsubscribedAt: new Date() }).where(eq(users.id, userId));
 }
 
 /** For the inbound Twilio webhook's STOP-keyword handling - looked up by phone, not token. */
-export async function findFanByPhone(phone: string): Promise<Fan | null> {
-  const rows = await db.select().from(fans).where(eq(fans.phone, phone)).limit(1);
+export async function findUserBySmsPhone(phone: string) {
+  const rows = await db.select().from(users).where(eq(users.smsAlertsPhone, phone)).limit(1);
   return rows[0] ?? null;
 }

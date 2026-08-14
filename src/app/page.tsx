@@ -107,7 +107,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
               🏆 Game Day New England
             </Link>
             <Link
-              href="/follow"
+              href="/sign-up"
               className="text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
             >
               Follow your school →
