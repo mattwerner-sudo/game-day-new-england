@@ -2697,3 +2697,110 @@ actual rendered pages. This first pass targeted pure-function coverage specifica
 free of that infrastructure cost and still covers the functions that have caused every real bug
 found so far - a reasonable next increment if the founder wants deeper coverage later, not
 something this pass tried to solve all at once.
+
+## 46. Session log: 2026-08-13/14 (continued) — real authentication (Better Auth): email/
+password, email/phone OTP, Google
+
+**Founder asked for real accounts** - email+password, email-or-phone one-time codes, and Google
+sign-in, cheapest option now that also scales. Two decisions confirmed with the founder before
+building (see the plan file this session used): **unify** the old anonymous, passwordless `fans`
+table into real accounts rather than run both side by side (0 real fan rows existed, so this was
+a clean schema cut, not a data migration - the cheapest possible moment to make this call), and
+**add a short post-signup profile step** (name + favorite schools) rather than collect nothing
+beyond credentials.
+
+**Library: Better Auth**, chosen and verified this session, not assumed - free, fully
+self-hosted, no per-seat/MAU pricing (permanent fit for the cost constraint, not just at
+launch), and the Better Auth team took over maintaining Auth.js/NextAuth in early 2026, making
+it the more actively-developed choice going forward. Confirmed real compatibility via `npm view`
+before installing (`drizzle-orm: ^0.45.2` peer dep is an exact match to this repo's installed
+version). `emailAndPassword` (built in), `socialProviders.google` (built in), an `emailOTP`
+plugin and a `phoneNumber` plugin for the two passwordless code flows - both OTP plugins accept
+a custom send function, so delivery reuses `src/email/send.ts` (Resend) and `src/sms/send.ts`
+(Twilio) verbatim. Zero new vendor cost - both already paid for from the SMS-reminder feature.
+
+**Schema** (`src/db/schema.ts`): `fans` removed; four new tables (`users`, `sessions`,
+`accounts`, `verifications`) added. These four deliberately do NOT follow this file's usual
+`uuid()`/`withTimezone` conventions - matched to Better Auth's own real generated schema instead
+(via `npx @better-auth/cli generate`, used once as a one-time scaffold then removed from
+`package.json` entirely - its own bundled dependency tree carries real critical/high CVEs in a
+nested, older pinned copy of `better-auth`/`drizzle-orm` used only for its internal codegen,
+confirmed via `npm audit`/`npm ls` to be fully isolated from the actual runtime `better-auth`
+dependency, not worth keeping installed after the one-time use). Two real corrections the
+generator surfaced that the plan had flagged as unverified: `advanced.database.generateId:
+false` does **not** add a DB-level default the way it sounds - the generated schema had `text
+"id"` with no default at all, which would leave inserts with no id; left `generateId` unset
+entirely (Better Auth's own tested default) rather than fight it for cosmetic uuid-consistency.
+Also: the generator's timestamp columns have no timezone - kept as-is for these four
+library-owned tables specifically, since Better Auth's own internal expiry/session comparisons
+are written against that shape. `fanFollows`/`consentEvents`/`fanAlertLog` repointed from
+`fanId` → `userId`. SMS marketing consent (`smsConsentedAt`) stays a fact separate from phone
+*login* verification (`phoneNumberVerified`) - the same TCPA distinction (consent to alerts ≠
+proof of phone ownership) the old `fans` table already drew, carried forward deliberately.
+
+**Two real bugs found by reading the installed package's actual source, not assumed from
+docs:** (1) the `phoneNumber` plugin does **not** auto-create an account on first verification by
+default - confirmed by reading its verify route directly - it silently requires an explicit
+`signUpOnVerification` config (with a synthetic temp-email generator, since `users.email` is
+required+unique and a phone-only signup has no real email yet). Without this fix, "sign up with
+just a phone number" - one of the three methods explicitly asked for - would not have worked at
+all. (2) The phone number reaching Twilio was unnormalized (raw user input, not E.164) - dry-run
+mode masked this since it just console-logs whatever string it's given, but the real Twilio API
+would have rejected it. Fixed by normalizing client-side with the existing
+`src/fans/phone.ts:normalizeUsPhone` (a pure function, safe to import into a `"use client"`
+component) before every `sendOtp`/`verify` call in both `SignUpForm`/`SignInForm`.
+
+**Migration generation hit a real, documented-in-advance constraint**: drizzle-kit's interactive
+rename-detection prompt needs a TTY this environment doesn't have. Rather than guess at
+non-interactive flags, split the schema change into two purely mechanical migrations that never
+trigger the ambiguity at all - `0012` is 100% additive (new tables + new nullable-then-`userId`
+columns added alongside the still-present old `fanId` columns via a temporary scaffolded `fans`
+table definition kept byte-for-byte identical to the prior migration's shape), `0013` is 100%
+subtractive (drop the old table/columns/indexes). One hand-fix was needed in `0013`'s generated
+SQL: `DROP TABLE fans CASCADE` already drops the three dependent FK constraints implicitly, so
+drizzle-kit's own separately-generated explicit `DROP CONSTRAINT` statements for those same
+constraints failed with "does not exist" - removed as redundant (confirmed the migration
+transaction had rolled back cleanly on that failure before fixing it, so nothing was at risk).
+
+**Local PGlite corrupted twice more this session** (`RuntimeError: Aborted()`) - once from
+directly what CLAUDE.md already warns about (a separate `tsx` script query while the dev server
+was live), and once with **no concurrent process at all**, mid-session, after a moderate run of
+writes - matching a prior, unrelated PGlite incident already on record in this file's history.
+Rebuilt from scratch (`rm -rf .pglite && migrate.ts && seed.ts`) each time, per the project's
+standing "local PGlite is fully disposable, never source of truth" doctrine - not a new fragility
+introduced by this feature, a pre-existing, already-documented one hit again by ordinary
+back-and-forth dev-server restarts during a long session.
+
+**New routes**: `/sign-up`, `/sign-in` (client components - `SignUpForm.tsx`/`SignInForm.tsx` -
+**the first client-side JS/React state anywhere in this codebase**; every other page is a plain
+server component with a `<form method="POST">`; deliberately kept contained to just these two
+files), `/onboarding` (plain server component, no client JS needed - reuses the old `/follow`
+form's school-picker markup verbatim), the Better Auth catch-all handler
+(`src/app/api/auth/[...all]/route.ts`). Deleted the old anonymous `/follow` and `/confirm`
+routes/pages they replace. `/manage` and `/api/unsubscribe` were adapted, not replaced -
+deliberately stay token-based and login-free (`users.manageToken`, same shape as the old
+`fans.manageToken`) per CAN-SPAM's expectation that unsubscribing shouldn't require a login.
+"Continue with Google" only renders when `GOOGLE_CLIENT_ID` is actually set (same
+env-var-presence convention as the Resend/Twilio dry-run gates elsewhere in this codebase) -
+never ships a button that would error before real credentials exist.
+
+**Verified locally via live browser testing, all three signup methods, end to end**: password
+signup → dry-run verification email → clicking the link; email OTP → dry-run code → entering it
+→ landing on `/onboarding` with the real 98-school list → submitting name+schools+SMS-consent →
+redirect home; phone OTP (after both fixes above) → same full loop, confirmed the temp
+name/email were correctly synthesized. Google could not be verified end-to-end - no real
+Cloud Console credentials exist yet - only confirmed the button correctly stays hidden without
+them. `tsc --noEmit` clean, the existing 67-test suite unaffected. Migration applied to Neon
+(founder ran it directly - the auto-mode classifier blocked the agent's own attempt, same
+pattern as Section 44's bulk delete). Committed (`50c6791`).
+
+**Not yet done, needs the founder specifically:**
+- `BETTER_AUTH_SECRET` isn't set in Vercel yet - a real, separately-generated-from-dev value
+  (`openssl rand -base64 32`), same bucket as the other Vercel env vars already documented in
+  this file.
+- Google sign-in cannot go live until the founder creates a Google Cloud OAuth consent
+  screen/credentials and sets `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` - the button stays
+  correctly hidden until then, not broken, just not offered yet.
+- **The deployed app code was out of sync with the Neon schema between the migration landing
+  and this commit being pushed** - the live site's old code still queried the now-gone `fans`
+  table during that window. Flagged to the founder; resolved once this commit is pushed.
