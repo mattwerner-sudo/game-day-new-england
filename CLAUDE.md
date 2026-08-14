@@ -308,6 +308,29 @@ they've signed any New England schools specifically.
   signals, or a pivot toward cross-school/discovery features that would change the "no overlap"
   read above.
 
+### 0.10 New strategic surfaces from the founder (added 2026-08-14): iOS app + Chrome extension
+
+Founder-directed additions, not part of the original Business Plan v2.5's four surfaces (0.2) —
+recorded here so a future session has them as a standing goal rather than something to
+re-derive. **Not started, no code/scaffolding exists for either yet** - this entry is a durable
+record of the ask, not a design doc; a future session should scope real architecture/feasibility
+before building, the same way the ticketing/streaming embed work in Sections 41/47/48 pressure-
+tested before implementing rather than assumed.
+
+- **Mobile app on the Apple App Store.** This repo is a Next.js web app today - no React
+  Native/Expo/Capacitor project exists. Needs a real feasibility pass (native rewrite vs. a
+  webview/PWA-wrapper approach vs. Expo hitting the same API routes this app already exposes) and
+  an Apple Developer Program account ($99/year) before anything can ship, on top of App Review.
+- **Google Chrome extension.** No `manifest.json`/extension scaffold exists. Likely shape (not
+  yet designed): a popup or new-tab override surfacing "what's on this weekend" from the same
+  event data this repo already serves, probably via a small public JSON endpoint rather than
+  scraping the rendered page. Needs a one-time $5 Chrome Web Store developer registration and
+  passes through the Web Store's review process.
+
+Both are genuinely new build items, not extensions of the four planned surfaces in 0.2 - flagged
+here specifically so scoping work for either doesn't get conflated with the school portal/sponsor
+dashboard/NIL marketplace roadmap.
+
 ---
 
 ## 1. What this is
