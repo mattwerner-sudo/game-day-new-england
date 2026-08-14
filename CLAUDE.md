@@ -3220,3 +3220,49 @@ confirmed via `read_page`'s interactive-element listing that the buttons/inputs 
 correct regardless. `tsc --noEmit` clean, full suite still 94/94 (no test coverage exists for
 these client components - matches this project's established testing boundary of unit-testing
 pure logic, not React component rendering).
+
+## 51. Session log: 2026-08-15 (continued) — school logos on the homepage and event pages
+
+Founder asked to add logos per school/game. Checked feasibility before building anything, not
+assumed: SIDEARM sites expose a real, consistent logo at a fixed relative path off each school's
+own domain (`/images/logos/site/site.png`), confirmed directly against 6 real schools (Amherst,
+Bates, Hamilton, Holy Cross, MIT, Providence/JWU) via `curl`, plus confirmed that path 302-
+redirects through SIDEARM's own image CDN to a real `image/webp` (a plain `<img src>` follows
+that transparently). Checked a real Presto school (CCSU) directly and found no equivalent - Presto
+gets no logo, not a guessed/broken one. Since ~90 of this repo's ~100 schools are SIDEARM
+(`cmsPlatform` already tracked per school in `schools.ts`), this covers the large majority for
+free, derived from data already in the schema - no per-school manual curation needed, unlike the
+`SPECIAL_VENUES`/`VIVENU_TICKET_DOMAINS` allowlists elsewhere in this codebase.
+
+**New `src/lib/schoolLogo.ts`** (`getSchoolLogoUrl`, pure function, 5 unit tests) - returns
+`{origin}/images/logos/site/site.png` only when `cmsPlatform === "sidearm"`, null otherwise.
+**New `src/components/SchoolLogo.tsx`** - the first shared component in this codebase (previously
+every page inlined its own markup); a small `"use client"` leaf that hides itself on image load
+failure (`onError`) rather than showing a broken-image icon, since a resolved url is still a live
+third-party asset that could 404 for a school outside the verified sample.
+
+**Query layer** (`src/db/queries.ts`): added `homeSchoolLogoUrl`/`awaySchoolLogoUrl` to the shared
+`WeekendEvent` interface (not `EventDetail`-only - needed on both the homepage list and the detail
+page, so unlike Section 42's list-payload-bloat caution this genuinely belongs on the shared type).
+Computed post-query via a small `resolveLogo()` helper applied to each row, the same pattern
+`getEventById` already used for `specialVenueName`/`resolveSpecialVenue` - not attempted in raw SQL
+since URL parsing isn't SQL-friendly. Wired into all three query functions that return
+`WeekendEvent[]`/`EventDetail` (`getFilteredEventsUncached`, `getEventById`,
+`getUpcomingEventsForFollows`) by selecting each side's `websiteUrl`/`cmsPlatform` off the
+already-joined `homeSchools`/`awaySchools` aliases - no new joins needed, both aliases already
+existed for every other per-school field.
+
+**UI**: homepage list rows and the event detail page's `<h1>` both get a small inline logo before
+each school name (`text-2xl`/`h-7 w-7` on the detail page, smaller `h-5 w-5` on the list) -
+inline-block with `align-text-bottom` rather than a flex layout, so long school names still wrap
+normally instead of the logo forcing a different flow.
+
+**Verified live against real Neon data**, not just unit tests: 22 real games on the homepage
+resolved 29 total logo images, confirmed all 29 actually loaded (`naturalWidth > 0` on every one,
+zero broken) via a script-injected check rather than eyeballing. Also found and confirmed a real,
+*correct* null case rather than assuming a bug: one UConn @ Boston University field hockey game
+shows no BU logo because that specific event's `homeTeamId` is genuinely null in the data (BU
+resolved via `opponentNameRaw` fallback text, not a real team link, confirmed via a direct DB
+query) - the exact same "didn't resolve to a seeded school" case this file's `homeSchoolName`
+coalesce already handles, so no logo is the correct behavior, not a defect. `tsc --noEmit` clean,
+full suite 99/99 (94 + 5 new).

@@ -5,6 +5,7 @@ import { db } from "./client";
 import { events, teams, schools, venues } from "./schema";
 import { NE_STATES, DateRange, getRangeWindow } from "./dateRange";
 import { resolveSpecialVenue } from "./specialVenues";
+import { getSchoolLogoUrl } from "@/lib/schoolLogo";
 
 export * from "./dateRange";
 
@@ -12,6 +13,12 @@ const homeTeams = alias(teams, "home_teams");
 const awayTeams = alias(teams, "away_teams");
 const homeSchools = alias(schools, "home_schools");
 const awaySchools = alias(schools, "away_schools");
+
+/** Left-joined school columns are nullable regardless of the underlying not-null constraint. */
+function resolveLogo(websiteUrl: string | null, cmsPlatform: string | null): string | null {
+  if (!websiteUrl || !cmsPlatform) return null;
+  return getSchoolLogoUrl(websiteUrl, cmsPlatform);
+}
 
 export interface WeekendEvent {
   id: string;
@@ -25,6 +32,8 @@ export interface WeekendEvent {
   isExhibition: boolean;
   homeSchoolName: string | null;
   awaySchoolName: string | null;
+  homeSchoolLogoUrl: string | null;
+  awaySchoolLogoUrl: string | null;
   // special_event only (meets, invitationals, championships - see CLAUDE.md Section 5/31).
   // homeSchoolName/awaySchoolName stay null for these rows - there's no single home team.
   eventName: string | null;
@@ -119,6 +128,10 @@ async function getFilteredEventsUncached(
       // fallback) when even that raw text is missing.
       homeSchoolName: sql<string | null>`coalesce(${homeSchools.name}, ${events.opponentNameRaw})`,
       awaySchoolName: sql<string | null>`coalesce(${awaySchools.name}, ${events.opponentNameRaw})`,
+      homeSchoolWebsiteUrl: homeSchools.websiteUrl,
+      homeSchoolCmsPlatform: homeSchools.cmsPlatform,
+      awaySchoolWebsiteUrl: awaySchools.websiteUrl,
+      awaySchoolCmsPlatform: awaySchools.cmsPlatform,
       eventName: events.eventName,
       participatingSchoolNames: participatingSchoolNamesSql,
       venueName: venues.name,
@@ -140,7 +153,11 @@ async function getFilteredEventsUncached(
     .where(and(...conditions))
     .orderBy(asc(events.startDatetime));
 
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    homeSchoolLogoUrl: resolveLogo(r.homeSchoolWebsiteUrl, r.homeSchoolCmsPlatform),
+    awaySchoolLogoUrl: resolveLogo(r.awaySchoolWebsiteUrl, r.awaySchoolCmsPlatform),
+  }));
 }
 
 /**
@@ -173,6 +190,10 @@ export async function getEventById(id: string): Promise<EventDetail | null> {
       isExhibition: events.isExhibition,
       homeSchoolName: sql<string | null>`coalesce(${homeSchools.name}, ${events.opponentNameRaw})`,
       awaySchoolName: sql<string | null>`coalesce(${awaySchools.name}, ${events.opponentNameRaw})`,
+      homeSchoolWebsiteUrl: homeSchools.websiteUrl,
+      homeSchoolCmsPlatform: homeSchools.cmsPlatform,
+      awaySchoolWebsiteUrl: awaySchools.websiteUrl,
+      awaySchoolCmsPlatform: awaySchools.cmsPlatform,
       eventName: events.eventName,
       participatingSchoolNames: participatingSchoolNamesSql,
       venueName: venues.name,
@@ -203,6 +224,8 @@ export async function getEventById(id: string): Promise<EventDetail | null> {
     ...rows[0],
     startDatetime: new Date(rows[0].startDatetime),
     specialVenueName: resolveSpecialVenue(rows[0].venueName),
+    homeSchoolLogoUrl: resolveLogo(rows[0].homeSchoolWebsiteUrl, rows[0].homeSchoolCmsPlatform),
+    awaySchoolLogoUrl: resolveLogo(rows[0].awaySchoolWebsiteUrl, rows[0].awaySchoolCmsPlatform),
   };
 }
 
@@ -320,6 +343,10 @@ export async function getUpcomingEventsForFollows(
       // fallback) when even that raw text is missing.
       homeSchoolName: sql<string | null>`coalesce(${homeSchools.name}, ${events.opponentNameRaw})`,
       awaySchoolName: sql<string | null>`coalesce(${awaySchools.name}, ${events.opponentNameRaw})`,
+      homeSchoolWebsiteUrl: homeSchools.websiteUrl,
+      homeSchoolCmsPlatform: homeSchools.cmsPlatform,
+      awaySchoolWebsiteUrl: awaySchools.websiteUrl,
+      awaySchoolCmsPlatform: awaySchools.cmsPlatform,
       eventName: events.eventName,
       participatingSchoolNames: participatingSchoolNamesSql,
       venueName: venues.name,
@@ -349,7 +376,11 @@ export async function getUpcomingEventsForFollows(
     )
     .orderBy(asc(events.startDatetime));
 
-  return rows;
+  return rows.map((r) => ({
+    ...r,
+    homeSchoolLogoUrl: resolveLogo(r.homeSchoolWebsiteUrl, r.homeSchoolCmsPlatform),
+    awaySchoolLogoUrl: resolveLogo(r.awaySchoolWebsiteUrl, r.awaySchoolCmsPlatform),
+  }));
 }
 
 export interface FilterOptions {

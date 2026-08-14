@@ -6,6 +6,7 @@ import { getEventById, EventDetail, WeekendEvent } from "@/db/queries";
 import { formatGender, formatSport, formatLocation, formatParticipants, eventTitle } from "@/lib/format";
 import { resolveEmbed, resolveTicketEmbed, resolveNecFrontRowEmbed } from "@/lib/embed";
 import { withTicketAffiliateTag } from "@/lib/affiliate";
+import { SchoolLogo } from "@/components/SchoolLogo";
 import { auth } from "@/auth/auth";
 import {
   isFollowingTeam,
@@ -239,8 +240,19 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           </>
         ) : (
           <h1 className="mt-3 text-2xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+            <SchoolLogo
+              src={event.awaySchoolLogoUrl}
+              alt=""
+              className="mr-1.5 inline-block h-7 w-7 align-text-bottom object-contain"
+            />
             {event.awaySchoolName ?? "TBD"}{" "}
-            <span className="text-zinc-400">at</span> {event.homeSchoolName ?? "TBD"}
+            <span className="text-zinc-400">at</span>{" "}
+            <SchoolLogo
+              src={event.homeSchoolLogoUrl}
+              alt=""
+              className="mr-1.5 inline-block h-7 w-7 align-text-bottom object-contain"
+            />
+            {event.homeSchoolName ?? "TBD"}
           </h1>
         )}
 

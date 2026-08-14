@@ -12,6 +12,7 @@ import {
 } from "@/db/queries";
 import { formatGender, formatSport, formatDay, formatTime, formatLocation, formatParticipants } from "@/lib/format";
 import { withTicketAffiliateTag } from "@/lib/affiliate";
+import { SchoolLogo } from "@/components/SchoolLogo";
 
 export const dynamic = "force-dynamic";
 
@@ -347,8 +348,18 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
                           </>
                         ) : (
                           <p className="mt-2 text-base font-medium text-zinc-950 dark:text-zinc-50">
+                            <SchoolLogo
+                              src={event.awaySchoolLogoUrl}
+                              alt=""
+                              className="mr-1 inline-block h-5 w-5 align-text-bottom object-contain"
+                            />
                             {event.awaySchoolName ?? "TBD"}{" "}
                             <span className="text-zinc-400">at</span>{" "}
+                            <SchoolLogo
+                              src={event.homeSchoolLogoUrl}
+                              alt=""
+                              className="mr-1 inline-block h-5 w-5 align-text-bottom object-contain"
+                            />
                             {event.homeSchoolName ?? "TBD"}
                           </p>
                         )}
