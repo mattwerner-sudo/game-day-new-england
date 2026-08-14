@@ -1,8 +1,15 @@
 import { and, eq, isNotNull, isNull, or } from "drizzle-orm";
 import { db } from "../src/db/client";
 import { users, fanAlertLog } from "../src/db/schema";
-import { getFollowedSchools } from "../src/fans/queries";
-import { getUpcomingEventsForSchoolIds, WeekendEvent } from "../src/db/queries";
+import {
+  getFollowedSchools,
+  getFollowedTeams,
+  getFollowedLeagues,
+  getFollowedSpecialVenues,
+  getFollowedGameIds,
+} from "../src/fans/queries";
+import { getUpcomingEventsForFollows, WeekendEvent } from "../src/db/queries";
+import { formatGender, formatSport } from "../src/lib/format";
 import { sendEmail } from "../src/email/send";
 import { digestEmail } from "../src/email/templates";
 import { sendSms } from "../src/sms/send";
@@ -20,6 +27,10 @@ import { digestSms } from "../src/sms/templates";
  * dedup - someone subscribed to both gets both, someone who stopped texts but kept email still
  * gets email, and sending one channel never marks the other as sent (see fanAlertLog's channel
  * column).
+ *
+ * Followed games get the same weekly-digest cadence as every other follow type - they simply
+ * start appearing once within the existing 7-day window (getUpcomingEventsForFollows), no
+ * special-casing needed. A closer-to-game-day reminder is real, separate, deferred future work.
  */
 async function sentEventIds(userId: string, channel: "email" | "sms"): Promise<Set<string>> {
   const rows = await db
@@ -47,12 +58,33 @@ async function main() {
   console.log(`${eligibleUsers.length} user(s) eligible for at least one channel`);
 
   for (const user of eligibleUsers) {
-    const followedSchools = await getFollowedSchools(user.id);
-    if (followedSchools.length === 0) continue;
+    const [followedSchools, followedTeams, followedLeagues, followedVenues, followedGameIds] = await Promise.all([
+      getFollowedSchools(user.id),
+      getFollowedTeams(user.id),
+      getFollowedLeagues(user.id),
+      getFollowedSpecialVenues(user.id),
+      getFollowedGameIds(user.id),
+    ]);
 
-    const schoolIds = followedSchools.map((s) => s.id);
-    const upcoming = await getUpcomingEventsForSchoolIds(schoolIds);
-    const schoolNames = followedSchools.map((s) => s.name);
+    const hasAnyFollow =
+      followedSchools.length + followedTeams.length + followedLeagues.length + followedVenues.length + followedGameIds.length > 0;
+    if (!hasAnyFollow) continue;
+
+    const upcoming = await getUpcomingEventsForFollows({
+      schoolIds: followedSchools.map((s) => s.id),
+      teamIds: followedTeams.map((t) => t.id),
+      leagues: followedLeagues,
+      specialVenueNames: followedVenues,
+      eventIds: followedGameIds,
+    });
+
+    const labels = [
+      ...followedSchools.map((s) => s.name),
+      ...followedTeams.map((t) => `${t.schoolName} ${formatGender(t.gender)} ${formatSport(t.sport)}`),
+      ...followedLeagues,
+      ...followedVenues,
+      ...(followedGameIds.length > 0 ? [`${followedGameIds.length} followed game${followedGameIds.length > 1 ? "s" : ""}`] : []),
+    ];
 
     // manageToken is always populated on creation (src/auth/auth.ts's databaseHooks) - nullable
     // at the DB level only because Better Auth's additionalFields don't support NOT NULL.
@@ -63,7 +95,7 @@ async function main() {
       const alreadySent = await sentEventIds(user.id, "email");
       const toSend = upcoming.filter((e) => !alreadySent.has(e.id));
       if (toSend.length > 0) {
-        const { subject, html } = digestEmail(schoolNames, toSend, manageToken);
+        const { subject, html } = digestEmail(labels, toSend, manageToken);
         await sendEmail({ to: user.email, subject, html });
         await logSent(user.id, toSend, "email");
         console.log(`  ${user.email} [email]: sent digest with ${toSend.length} game(s)`);
@@ -77,7 +109,7 @@ async function main() {
       const alreadySent = await sentEventIds(user.id, "sms");
       const toSend = upcoming.filter((e) => !alreadySent.has(e.id));
       if (toSend.length > 0) {
-        const body = digestSms(schoolNames, toSend, manageToken);
+        const body = digestSms(labels, toSend, manageToken);
         await sendSms({ to: user.smsAlertsPhone!, body });
         await logSent(user.id, toSend, "sms");
         console.log(`  ${user.smsAlertsPhone} [sms]: sent digest with ${toSend.length} game(s)`);

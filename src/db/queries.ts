@@ -4,6 +4,7 @@ import { unstable_cache } from "next/cache";
 import { db } from "./client";
 import { events, teams, schools, venues } from "./schema";
 import { NE_STATES, DateRange, getRangeWindow } from "./dateRange";
+import { resolveSpecialVenue } from "./specialVenues";
 
 export * from "./dateRange";
 
@@ -142,8 +143,23 @@ async function getFilteredEventsUncached(
   return rows;
 }
 
+/**
+ * Extends WeekendEvent with the raw ids/text a follow action needs (team ids, resolved league
+ * per side, resolved special-venue canonical name) - kept as a distinct type/query rather than
+ * adding these to WeekendEvent itself, which getFilteredEvents also returns for the hot list
+ * page. Section 42's caching-bug lesson was a bloated payload silently causing problems - don't
+ * grow that payload for fields only the single-event detail page needs.
+ */
+export interface EventDetail extends WeekendEvent {
+  homeTeamId: string | null;
+  awayTeamId: string | null;
+  homeLeague: string | null;
+  awayLeague: string | null;
+  specialVenueName: string | null;
+}
+
 /** Single event for its detail page (src/app/events/[id]/page.tsx) - not date-range scoped. */
-export async function getEventById(id: string): Promise<WeekendEvent | null> {
+export async function getEventById(id: string): Promise<EventDetail | null> {
   const rows = await db
     .select({
       id: events.id,
@@ -168,6 +184,10 @@ export async function getEventById(id: string): Promise<WeekendEvent | null> {
       streamingVideoUrl: events.streamingVideoUrl,
       radioNetwork: events.radioNetwork,
       streamingAudioUrl: events.streamingAudioUrl,
+      homeTeamId: events.homeTeamId,
+      awayTeamId: events.awayTeamId,
+      homeLeague: sql<string | null>`coalesce(${homeTeams.conference}, ${homeSchools.conference})`,
+      awayLeague: sql<string | null>`coalesce(${awayTeams.conference}, ${awaySchools.conference})`,
     })
     .from(events)
     .leftJoin(homeTeams, eq(events.homeTeamId, homeTeams.id))
@@ -179,7 +199,11 @@ export async function getEventById(id: string): Promise<WeekendEvent | null> {
     .limit(1);
 
   if (!rows[0]) return null;
-  return { ...rows[0], startDatetime: new Date(rows[0].startDatetime) };
+  return {
+    ...rows[0],
+    startDatetime: new Date(rows[0].startDatetime),
+    specialVenueName: resolveSpecialVenue(rows[0].venueName),
+  };
 }
 
 /**
@@ -209,12 +233,75 @@ export async function getFilteredEvents(
  * webpage silently listing one) and, like the rest of the product, anything outside New
  * England.
  */
-export async function getUpcomingEventsForSchoolIds(
-  schoolIds: string[],
+export interface FollowCriteria {
+  schoolIds?: string[];
+  teamIds?: string[];
+  leagues?: string[];
+  specialVenueNames?: string[]; // canonical names from src/db/specialVenues.ts, e.g. "TD Garden"
+  eventIds?: string[];
+}
+
+/**
+ * Resolves canonical special-venue names to the underlying venues.id rows that actually match
+ * them - the same real venue is fragmented across multiple rows (see specialVenues.ts's
+ * comment), so this can return several ids per canonical name. A small table scan (id+name
+ * only, no join) - fine at this table's size; revisit only if it shows up in real profiling
+ * later, matching this project's own "don't optimize before it's a proven problem" precedent
+ * (Section 36).
+ */
+async function resolveSpecialVenueIds(canonicalNames: string[]): Promise<string[]> {
+  if (canonicalNames.length === 0) return [];
+  const wanted = new Set(canonicalNames);
+  const allVenues = await db.select({ id: venues.id, name: venues.name }).from(venues);
+  return allVenues
+    .filter((v) => {
+      const resolved = resolveSpecialVenue(v.name);
+      return resolved !== null && wanted.has(resolved);
+    })
+    .map((v) => v.id);
+}
+
+/**
+ * One OR-joined query covering all 5 subscription types (schools, teams, leagues, special
+ * venues, specific games) - matches this file's existing multi-condition or() pattern rather
+ * than running several separate queries and merging/deduping in JS, so a game matching two
+ * followed criteria at once (e.g. a followed team's game that's also at a followed venue)
+ * naturally rows out once for free. Excludes cancelled games and, like the rest of the product,
+ * anything outside New England.
+ */
+export async function getUpcomingEventsForFollows(
+  criteria: FollowCriteria,
   now?: Date
 ): Promise<WeekendEvent[]> {
-  if (schoolIds.length === 0) return [];
+  const { schoolIds = [], teamIds = [], leagues = [], specialVenueNames = [], eventIds = [] } = criteria;
+  const venueIds = await resolveSpecialVenueIds(specialVenueNames);
+  if (schoolIds.length + teamIds.length + leagues.length + venueIds.length + eventIds.length === 0) {
+    return [];
+  }
+
   const { start, end } = getRangeWindow("week", now);
+  const matchConditions = [];
+  if (schoolIds.length) {
+    matchConditions.push(
+      inArray(homeSchools.id, schoolIds),
+      inArray(awaySchools.id, schoolIds),
+      // Confirmed real bug, not assumed: a hand-rolled `sql` template interpolating a
+      // plain JS array here bound it as a single malformed scalar parameter ("malformed
+      // array literal" from Postgres) rather than a real array - drizzle-orm's own
+      // arrayOverlaps() handles array-parameter binding correctly, this doesn't.
+      arrayOverlaps(events.participatingSchoolIds, schoolIds)
+    );
+  }
+  if (teamIds.length) {
+    matchConditions.push(inArray(events.homeTeamId, teamIds), inArray(events.awayTeamId, teamIds));
+  }
+  if (leagues.length) {
+    const homeLeague = sql`coalesce(${homeTeams.conference}, ${homeSchools.conference})`;
+    const awayLeague = sql`coalesce(${awayTeams.conference}, ${awaySchools.conference})`;
+    matchConditions.push(inArray(homeLeague, leagues), inArray(awayLeague, leagues));
+  }
+  if (venueIds.length) matchConditions.push(inArray(events.venueId, venueIds));
+  if (eventIds.length) matchConditions.push(inArray(events.id, eventIds));
 
   const rows = await db
     .select({
@@ -256,15 +343,7 @@ export async function getUpcomingEventsForSchoolIds(
         gte(events.startDatetime, start),
         lt(events.startDatetime, end),
         inArray(venues.state, NE_STATES),
-        or(
-          inArray(homeSchools.id, schoolIds),
-          inArray(awaySchools.id, schoolIds),
-          // Confirmed real bug, not assumed: a hand-rolled `sql` template interpolating a
-          // plain JS array here bound it as a single malformed scalar parameter ("malformed
-          // array literal" from Postgres) rather than a real array - drizzle-orm's own
-          // arrayOverlaps() handles array-parameter binding correctly, this doesn't.
-          arrayOverlaps(events.participatingSchoolIds, schoolIds)
-        ),
+        or(...matchConditions)!,
         or(eq(events.status, "scheduled"), eq(events.status, "postponed"), eq(events.status, "final"))
       )
     )
@@ -320,3 +399,25 @@ export const getFilterOptions = unstable_cache(
   ["getFilterOptions"],
   { revalidate: 300 }
 );
+
+/**
+ * Team picker source for /manage's team-follow picker only - kept separate from
+ * getFilterOptions (which the homepage also consumes) rather than folding this in, since at
+ * ~2,453 rows this is a meaningfully larger payload than anything else that function returns.
+ * Not cached: /manage is a low-traffic page, unlike the homepage.
+ */
+export async function getTeamPickerOptions(): Promise<
+  { id: string; sport: string; gender: string; schoolId: string; schoolName: string }[]
+> {
+  return db
+    .select({
+      id: teams.id,
+      sport: teams.sport,
+      gender: teams.gender,
+      schoolId: schools.id,
+      schoolName: schools.name,
+    })
+    .from(teams)
+    .innerJoin(schools, eq(teams.schoolId, schools.id))
+    .orderBy(asc(schools.name), asc(teams.sport), asc(teams.gender));
+}

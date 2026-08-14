@@ -248,17 +248,93 @@ export const fanFollows = pgTable(
   (table) => [uniqueIndex("fan_follows_user_school_idx").on(table.userId, table.schoolId)]
 );
 
-// Append-only consent ledger - never update/delete existing rows. schoolIds snapshots what was
-// selected/affected at the moment of each action so a row is self-contained evidence even if
-// fan_follows changes later.
+export const teamFollows = pgTable(
+  "team_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // cascade on both FKs (not just userId) - this project has repeatedly bulk-deleted teams
+    // rows during cleanup passes (Sections 21, 32/33); without cascade, the next such cleanup
+    // hits an FK violation the moment it touches a followed team.
+    teamId: uuid("team_id")
+      .notNull()
+      .references(() => teams.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("team_follows_user_team_idx").on(table.userId, table.teamId)]
+);
+
+// No FK - "league" is plain text everywhere in this app (see EventFilters.league,
+// getFilterOptions().leagues - there is no leagues table, just schools.conference/
+// teams.conference reconciled at query time). Values must only ever come from already-resolved
+// query output (getFilterOptions().leagues, or an event's own coalesced league text) - never
+// free text - so a stored value is guaranteed to match something real.
+export const leagueFollows = pgTable(
+  "league_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    league: text("league").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("league_follows_user_league_idx").on(table.userId, table.league)]
+);
+
+// No FK either, and deliberately not venues.id - see src/db/specialVenues.ts's comment for why
+// (the same real venue is fragmented across multiple venues rows, one per hosting school's own
+// feed spelling). Stores the CANONICAL name from SPECIAL_VENUES, resolved at write time from
+// whichever underlying venue row the user was actually looking at - never a raw venue id.
+export const specialVenueFollows = pgTable(
+  "special_venue_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    venueName: text("venue_name").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("special_venue_follows_user_venue_idx").on(table.userId, table.venueName)]
+);
+
+export const gameFollows = pgTable(
+  "game_follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    // cascade - same reasoning as team_follows.teamId; events get bulk-deleted routinely
+    // (Sections 34/35/44).
+    eventId: uuid("event_id")
+      .notNull()
+      .references(() => events.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("game_follows_user_event_idx").on(table.userId, table.eventId)]
+);
+
+// Append-only consent ledger - never update/delete existing rows. schoolIds/subjectIds snapshot
+// what was selected/affected at the moment of each action so a row is self-contained evidence
+// even if the follow tables change later.
 export const consentEvents = pgTable("consent_events", {
   id: uuid("id").primaryKey().defaultRandom(),
   userId: text("user_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
-  // "registered" | "onboarded" | "unsubscribed" | "sms_registered" | "sms_unsubscribed"
+  // "registered" | "onboarded" | "unsubscribed" | "sms_registered" | "sms_unsubscribed" |
+  // "followed_{school|team|league|venue|game}" | "unfollowed_{school|team|league|venue|game}"
   action: text("action").notNull(),
-  schoolIds: uuid("school_ids").array(),
+  schoolIds: uuid("school_ids").array(), // used by the 5 original actions above, unchanged
+  // Used by the new followed_*/unfollowed_* actions - schoolIds can't hold league/venue name
+  // strings (it's uuid[]), so these carry the equivalent for every subject type including
+  // schools going forward, via logFollowConsentEvent (src/fans/queries.ts).
+  subjectType: text("subject_type"), // "school" | "team" | "league" | "venue" | "game"
+  subjectIds: text("subject_ids").array(), // uuids or league/venue name strings, per subjectType
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
