@@ -1206,6 +1206,33 @@ export const SCHOOLS_SEED = [
     websiteUrl: "https://nvubadgers.com",
     cmsPlatform: "presto",
   },
+  // Added 2026-08-14: the other two NE-located Northeast Conference members (Central
+  // Connecticut, seeded above, is the third). Both reclassified to D1/NEC in 2022 (Stonehill)
+  // and 2025 (New Haven) - confirmed via real search, not assumed. Confirmed live SIDEARM via
+  // direct fetch (sidearm-schedule/sidearmsports markers in each school's real schedule page
+  // HTML) - unlike CCSU, which is Presto.
+  {
+    name: "Stonehill College",
+    conference: "Northeast Conference",
+    division: "D1",
+    city: "Easton",
+    state: "MA",
+    lat: 42.0602,
+    lng: -71.0796,
+    websiteUrl: "https://stonehillskyhawks.com",
+    cmsPlatform: "sidearm",
+  },
+  {
+    name: "University of New Haven",
+    conference: "Northeast Conference",
+    division: "D1",
+    city: "West Haven",
+    state: "CT",
+    lat: 41.2958,
+    lng: -72.9673,
+    websiteUrl: "https://newhavenchargers.com",
+    cmsPlatform: "sidearm",
+  },
 ] as const;
 
 // ================================================================================================

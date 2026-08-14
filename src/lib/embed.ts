@@ -88,3 +88,55 @@ export function resolveTicketEmbed(url: string | null): EmbedInfo | null {
   if (VIVENU_TICKET_DOMAINS.has(host)) return { url, label: "Buy Tickets" };
   return null;
 }
+
+/**
+ * NEC Front Row (necfrontrow.com) is the Northeast Conference's own branded portal, not a
+ * separate video platform - confirmed by inspecting a live game page: every sampled game across
+ * 4 sports (soccer, baseball, softball, track) at 6+ different NEC schools resolves to the exact
+ * same Hudl vCloud embed this file already whitelists above. Their public, unauthenticated API
+ * (`api.necfrontrow.com/games/games/{id}`) returns an `event_code` field containing the raw
+ * `<iframe src="https://vcloud.hudl.com/broadcast/embed/{hudlId}...">` HTML for that game -
+ * confirmed via direct fetches, not assumed from their site's client-side JS alone.
+ *
+ * Unlike every other resolver in this file, this one needs a network call (the wrapper URL only
+ * carries NEC Front Row's own numeric game id, not the underlying Hudl id) - the one exception to
+ * this file's otherwise-pure-function pattern. Always falls through to null on any failure
+ * (unresolvable id, network error, unexpected shape) so the caller's existing "no embed -> plain
+ * external link" fallback still applies; never throws.
+ */
+const NEC_FRONTROW_HOSTS = new Set(["necfrontrow.com"]);
+
+export async function resolveNecFrontRowEmbed(url: string | null): Promise<EmbedInfo | null> {
+  if (!url) return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return null;
+  }
+  if (!NEC_FRONTROW_HOSTS.has(parsed.hostname.replace(/^www\./, ""))) return null;
+
+  const gameIdMatch = parsed.pathname.match(/^\/game\/(\d+)/);
+  if (!gameIdMatch) return null;
+
+  try {
+    // 5s cap + 5min cache: this runs during a real page render (see events/[id]/page.tsx), so a
+    // slow/down third party can't be allowed to hang or repeatedly slow down that page.
+    const res = await fetch(`https://api.necfrontrow.com/games/games/${gameIdMatch[1]}`, {
+      signal: AbortSignal.timeout(5000),
+      next: { revalidate: 300 },
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { event_code?: string | null };
+    if (!data.event_code) return null; // real, observed case: video not assigned yet, or id expired
+
+    const hudlSrcMatch = data.event_code.match(/https:\/\/vcloud\.hudl\.com\/broadcast\/embed\/\S+?(?="|\s|$)/);
+    if (!hudlSrcMatch) return null;
+
+    // Re-validates against HUDL_EMBED_PATTERN rather than trusting this third-party HTML blob
+    // directly - same "only what's individually verified" discipline as VIVENU_TICKET_DOMAINS.
+    return resolveEmbed(hudlSrcMatch[0]);
+  } catch {
+    return null;
+  }
+}

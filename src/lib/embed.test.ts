@@ -1,5 +1,5 @@
-import { describe, expect, it } from "vitest";
-import { resolveEmbed, resolveTicketEmbed } from "./embed";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { resolveEmbed, resolveTicketEmbed, resolveNecFrontRowEmbed } from "./embed";
 
 describe("resolveEmbed", () => {
   it("returns null for a null url", () => {
@@ -86,5 +86,88 @@ describe("resolveTicketEmbed", () => {
 
   it("returns null for a malformed url", () => {
     expect(resolveTicketEmbed("not a url")).toBeNull();
+  });
+});
+
+describe("resolveNecFrontRowEmbed", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it("returns null for a null url without calling fetch", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    expect(await resolveNecFrontRowEmbed(null)).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns null for an unrelated domain without calling fetch", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    expect(await resolveNecFrontRowEmbed("https://www.espn.com/watch/player/_/id/8fd915db")).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("returns null for a necfrontrow.com url with no /game/{id} path", async () => {
+    const fetchSpy = vi.fn();
+    vi.stubGlobal("fetch", fetchSpy);
+    expect(await resolveNecFrontRowEmbed("https://necfrontrow.com/schedule")).toBeNull();
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
+  it("resolves a real game id to its underlying Hudl embed url", async () => {
+    // Real observed shape from api.necfrontrow.com/games/games/{id} (CLAUDE.md Section 48).
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          event_code:
+            '<iframe src="https://vcloud.hudl.com/broadcast/embed/4117912?autoplay=1" width="640" height="360" allow="fullscreen;" style="border:0;overflow:hidden;"></iframe>',
+        }),
+      })
+    );
+    expect(await resolveNecFrontRowEmbed("https://necfrontrow.com/game/14665")).toEqual({
+      url: "https://vcloud.hudl.com/broadcast/embed/4117912?autoplay=1",
+      label: "Hudl",
+    });
+  });
+
+  it("returns null when the game id doesn't resolve (empty event_code)", async () => {
+    // Real observed case: an id whose video hasn't been assigned yet, or no longer exists.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({ ok: true, json: async () => ({ event_code: null }) })
+    );
+    expect(await resolveNecFrontRowEmbed("https://necfrontrow.com/game/99999999")).toBeNull();
+  });
+
+  it("returns null for a real API response shape: 200 OK with an empty body", async () => {
+    // Confirmed directly against the real API (CLAUDE.md Section 48): expired/never-populated
+    // game ids return HTTP 200 with a literal 0-byte body, not `{}` - .json() throws on that.
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => {
+          throw new SyntaxError("Unexpected end of JSON input");
+        },
+      })
+    );
+    expect(await resolveNecFrontRowEmbed("https://necfrontrow.com/game/14560")).toBeNull();
+  });
+
+  it("returns null on a non-ok API response", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false }));
+    expect(await resolveNecFrontRowEmbed("https://necfrontrow.com/game/14665")).toBeNull();
+  });
+
+  it("returns null if the fetch throws (network error/timeout)", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("timeout")));
+    expect(await resolveNecFrontRowEmbed("https://necfrontrow.com/game/14665")).toBeNull();
+  });
+
+  it("returns null for a malformed url", async () => {
+    expect(await resolveNecFrontRowEmbed("not a url")).toBeNull();
   });
 });

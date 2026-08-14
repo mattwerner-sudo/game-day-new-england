@@ -2976,3 +2976,95 @@ here since no deployed UI currently queries these tables, but open until pushed.
 
 **Not yet pushed**: `a95a6ce` (ticket embedding) and `8d5ef7a` (subscriptions) are local-only as
 of this entry.
+
+## 48. Session log: 2026-08-14 (continued) — NEC Front Row streaming embed + onboarded Stonehill
+College and University of New Haven
+
+Founder asked to pressure-test "NEC Front Row" (the Northeast Conference's own streaming brand)
+for in-app embedding, the same way Vivenu was pressure-tested for tickets (Section 47). Then,
+once the mechanism proved out, scoped a real build to it - but only for NEC schools actually
+located in New England.
+
+**What NEC Front Row actually is, confirmed by inspection, not assumed**: not a separate video
+platform - `necfrontrow.com` is the conference's own branded portal wrapping **Hudl vCloud**, the
+exact embed technology already whitelisted in `src/lib/embed.ts` for the Hudl work done earlier
+this session. Loaded a real live game page and watched network requests: every game page calls a
+fully public, unauthenticated JSON endpoint, `api.necfrontrow.com/games/games/{id}`, which returns
+an `event_code` field containing a raw `<iframe src="https://vcloud.hudl.com/broadcast/embed/
+{hudlId}...">`. Sampled this across soccer, baseball, softball, and track games from 6+ different
+schools - **100% consistently Hudl**, no other provider found. Confirmed no `X-Frame-Options`/CSP
+on either `necfrontrow.com` or the underlying Hudl player, and watched a real player render
+end-to-end in the browser.
+
+**Real caveat found and designed around**: not every game id resolves. A stale/pre-existing id
+already in our own data (`necfrontrow.com/game/14665`) hit the API and got back **HTTP 200 with a
+literal 0-byte body** (not `{}` - confirmed via a raw curl, `bytes=0`), which throws on `.json()`.
+Separately, further-out future games return a real JSON object but with `event_code: null` - the
+video simply hasn't been assigned yet. Both are real, current-data cases, not edge cases invented
+for testing.
+
+**Scoping check before building**: only Central Connecticut State (already ingested, via Presto)
+was in our data as an NEC member. Founder decided to scope this feature to NEC schools physically
+located in New England specifically - real search confirmed two more exist: **Stonehill College**
+(Easton, MA - moved to D1/NEC 2022, full D1 membership 2025-26) and **University of New Haven**
+(West Haven, CT - moved to D1/NEC July 2025). Founder chose to onboard both properly rather than
+build the feature CCSU-only.
+
+**Onboarded both as new schools** (`src/db/seed/schools.ts`): confirmed live SIDEARM via direct
+fetch (`sidearm-schedule`/`sidearmsports` markers in each school's real schedule page HTML) -
+unlike CCSU, which is Presto. Real coordinates verified via search, not guessed. Seeded and
+ingested against Neon directly (local PGlite still only seeds schools/sports, not sufficient for
+this): Stonehill - 22 sports, zero ingestion errors. New Haven - 18 sports, zero ingestion errors.
+
+**Root-caused why CCSU (Presto) has zero streaming URLs, before building anything for it**:
+Presto's ICS feed genuinely never carries the structured `TV:`/`Streaming Video:` lines SIDEARM's
+does - a previous session already found and documented this exact fact
+(`src/ingestion/presto/ingestSchool.ts`'s own comment). Checked one level further this session:
+CCSU's real schedule page (`ccsubluedevils.com`) does mention "NECFrontRow" per game, but as
+**plain text with no link at all** (`<div class="event-notes">NECFrontRow</div>`) - not
+extractable by any parsing fix. Getting CCSU real per-game links would require a genuinely
+different mechanism (correlating our own events against NEC Front Row's schedule API by
+date+teams) - out of scope for this pass, and not needed for Stonehill/New Haven, which already
+carry real URLs via their SIDEARM feeds' existing `Streaming Video:` line.
+
+**Real volume check, before and after onboarding**: before, 0 of CCSU's 60 upcoming home events
+had any `streamingVideoUrl` at all. After onboarding, Stonehill's SIDEARM feed alone already
+populates `streamingVideoUrl` on 112 of 201 home events (Stonehill's own site,
+`stonehillskyhawks.com`, and `necfrontrow.com` among the hosts seen), New Haven on 78 of 137. Of
+the currently-*upcoming* ones specifically, none yet carry a clean `necfrontrow.com/game/{id}`
+shape - real, current data confirms NEC Front Row only assigns a real per-game id close to game
+day (matching the `event_code: null`-until-later behavior found on their own site); further-out
+games instead carry generic placeholder links (`necfrontrow.com/schools/UNH`,
+`.../live-schedule?school=UNH`) or - a separate real data quirk found along the way - a garbled
+`stonehillskyhawks.com/calendar.ashx/necfrontrow.com/schools/SC` URL (their own feed relative-
+resolving an already-relative link against the calendar endpoint itself, not this app's bug).
+Both resolve to `null` correctly and fall through to the existing external-link behavior, not a
+crash - the games that already carry a clean id will embed the moment they get one, no further
+code needed.
+
+**Implementation** (`src/lib/embed.ts`, `resolveNecFrontRowEmbed`): the one resolver in this file
+that isn't a pure function - it needs a network call, since the wrapper URL only carries NEC Front
+Row's own numeric id, not the underlying Hudl id. 5-second timeout (`AbortSignal.timeout`) plus a
+5-minute Next.js fetch cache (`next: { revalidate: 300 }`) since this runs during a real page
+render (`events/[id]/page.tsx`) - a slow or down third party can't be allowed to hang or repeatedly
+slow that page down. Re-validates the extracted URL against the existing `HUDL_EMBED_PATTERN` via
+`resolveEmbed()` rather than trusting the third-party HTML blob directly, matching this file's
+"only what's individually verified" discipline (same spirit as the Vivenu domain allowlist).
+Always resolves to `null` on any failure - never throws - so the caller's existing "no embed ->
+external link" fallback keeps working unchanged.
+
+**Verified three ways, not just unit tests**: (1) 8 new unit tests in `embed.test.ts` covering the
+null/non-matching/malformed-url short-circuits (no fetch call made), a successful resolution using
+the real captured JSON shape, `event_code: null`, a non-ok response, a network-error/timeout
+throw, and specifically the real 0-byte-body case (`.json()` throwing `SyntaxError`) - not a
+hypothetical, the exact shape confirmed via curl above. (2) A standalone script call to
+`resolveNecFrontRowEmbed` against the real live id found during research (`/game/16405`) -
+resolved correctly to the real Hudl url with no mocking at all. (3) Full page-level browser
+verification: temporarily pointed one real (unrelated) event's `streamingVideoUrl` at that same
+live NEC Front Row url directly in Neon, loaded its real event page, confirmed the iframe actually
+renders and plays the real NEC Front Row/Hudl broadcast, then reverted the row back to `null`
+immediately after. `tsc --noEmit` clean, full suite 89/89 passing.
+
+**Not yet committed as of this entry** - schema/ingestion changes (2 new schools' worth of real
+event data now in Neon) plus the `embed.ts`/`embed.test.ts`/`events/[id]/page.tsx` code changes,
+alongside this doc update.

@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { getEventById, EventDetail, WeekendEvent } from "@/db/queries";
 import { formatGender, formatSport, formatLocation, formatParticipants, eventTitle } from "@/lib/format";
-import { resolveEmbed, resolveTicketEmbed } from "@/lib/embed";
+import { resolveEmbed, resolveTicketEmbed, resolveNecFrontRowEmbed } from "@/lib/embed";
 import { auth } from "@/auth/auth";
 import {
   isFollowingTeam,
@@ -146,7 +146,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const event = await getEventById(id);
   if (!event) notFound();
 
-  const embed = resolveEmbed(event.streamingVideoUrl);
+  const embed = resolveEmbed(event.streamingVideoUrl) ?? (await resolveNecFrontRowEmbed(event.streamingVideoUrl));
   const ticketEmbed = resolveTicketEmbed(event.ticketUrl);
 
   // Session check - deliberately NOT redirecting when absent, this page must stay
