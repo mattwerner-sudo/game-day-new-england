@@ -8,26 +8,65 @@ import { normalizeUsPhone } from "@/fans/phone";
 const inputClass =
   "mt-1 block w-full rounded-lg border border-zinc-300 px-3 py-2 text-sm dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100";
 const buttonClass =
-  "rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50";
-const sectionClass = "rounded-lg border border-zinc-200 p-4 dark:border-zinc-800";
+  "w-full rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50";
+
+const METHODS = [
+  { key: "password", label: "Password" },
+  { key: "email", label: "Email Code" },
+  { key: "phone", label: "Phone Code" },
+] as const;
+type Method = (typeof METHODS)[number]["key"];
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{label}</span>
+      {children}
+    </label>
+  );
+}
 
 export function SignInForm({ googleEnabled }: { googleEnabled: boolean }) {
   const router = useRouter();
   const onSuccess = () => router.push("/");
+  const [method, setMethod] = useState<Method>("password");
 
   return (
-    <div className="mt-6 space-y-4">
-      <PasswordSignIn onSuccess={onSuccess} />
-      <EmailCodeSignIn onSuccess={onSuccess} />
-      <PhoneCodeSignIn onSuccess={onSuccess} />
+    <div className="mt-6">
+      <nav className="inline-flex rounded-lg border border-zinc-200 bg-white p-1 dark:border-zinc-800 dark:bg-zinc-950">
+        {METHODS.map((m) => (
+          <button
+            key={m.key}
+            type="button"
+            onClick={() => setMethod(m.key)}
+            className={
+              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors " +
+              (m.key === method
+                ? "bg-orange-600 text-white"
+                : "text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900")
+            }
+          >
+            {m.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="mt-4">
+        {method === "password" && <PasswordSignIn onSuccess={onSuccess} />}
+        {method === "email" && <EmailCodeSignIn onSuccess={onSuccess} />}
+        {method === "phone" && <PhoneCodeSignIn onSuccess={onSuccess} />}
+      </div>
+
       {googleEnabled && (
-        <button
-          type="button"
-          className="w-full rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
-          onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}
-        >
-          Continue with Google
-        </button>
+        <div className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+          <button
+            type="button"
+            className="w-full rounded-lg border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            onClick={() => authClient.signIn.social({ provider: "google", callbackURL: "/" })}
+          >
+            Continue with Google
+          </button>
+        </div>
       )}
     </div>
   );
@@ -52,26 +91,27 @@ function PasswordSignIn({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <form onSubmit={submit} className={sectionClass}>
-      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email + password</p>
-      <input
-        type="email"
-        placeholder="Email"
-        required
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className={inputClass}
-      />
-      <input
-        type="password"
-        placeholder="Password"
-        required
-        value={password}
-        onChange={(e) => setPassword(e.target.value)}
-        className={inputClass}
-      />
-      {status === "error" && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      <button type="submit" disabled={status === "loading"} className={`${buttonClass} mt-3`}>
+    <form onSubmit={submit} className="space-y-3">
+      <Field label="Email">
+        <input
+          type="email"
+          required
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className={inputClass}
+        />
+      </Field>
+      <Field label="Password">
+        <input
+          type="password"
+          required
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          className={inputClass}
+        />
+      </Field>
+      {status === "error" && <p className="text-xs text-red-600">{error}</p>}
+      <button type="submit" disabled={status === "loading"} className={buttonClass}>
         {status === "loading" ? "Signing in..." : "Sign in"}
       </button>
     </form>
@@ -111,30 +151,31 @@ function EmailCodeSignIn({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <form onSubmit={step === "email" ? sendCode : verifyCode} className={sectionClass}>
-      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email code</p>
-      <input
-        type="email"
-        placeholder="Email"
-        required
-        disabled={step === "code"}
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        className={inputClass}
-      />
-      {step === "code" && (
+    <form onSubmit={step === "email" ? sendCode : verifyCode} className="space-y-3">
+      <Field label="Email">
         <input
-          type="text"
-          inputMode="numeric"
-          placeholder="6-digit code"
+          type="email"
           required
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
+          disabled={step === "code"}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           className={inputClass}
         />
+      </Field>
+      {step === "code" && (
+        <Field label="6-digit code">
+          <input
+            type="text"
+            inputMode="numeric"
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className={inputClass}
+          />
+        </Field>
       )}
-      {status === "error" && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      <button type="submit" disabled={status === "loading"} className={`${buttonClass} mt-3`}>
+      {status === "error" && <p className="text-xs text-red-600">{error}</p>}
+      <button type="submit" disabled={status === "loading"} className={buttonClass}>
         {status === "loading" ? "Please wait..." : step === "email" ? "Send code" : "Verify code"}
       </button>
     </form>
@@ -182,30 +223,32 @@ function PhoneCodeSignIn({ onSuccess }: { onSuccess: () => void }) {
   }
 
   return (
-    <form onSubmit={step === "phone" ? sendCode : verifyCode} className={sectionClass}>
-      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Phone code</p>
-      <input
-        type="tel"
-        placeholder="(555) 555-5555"
-        required
-        disabled={step === "code"}
-        value={phoneNumber}
-        onChange={(e) => setPhoneNumber(e.target.value)}
-        className={inputClass}
-      />
-      {step === "code" && (
+    <form onSubmit={step === "phone" ? sendCode : verifyCode} className="space-y-3">
+      <Field label="Phone number">
         <input
-          type="text"
-          inputMode="numeric"
-          placeholder="6-digit code"
+          type="tel"
+          placeholder="(555) 555-5555"
           required
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
+          disabled={step === "code"}
+          value={phoneNumber}
+          onChange={(e) => setPhoneNumber(e.target.value)}
           className={inputClass}
         />
+      </Field>
+      {step === "code" && (
+        <Field label="6-digit code">
+          <input
+            type="text"
+            inputMode="numeric"
+            required
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            className={inputClass}
+          />
+        </Field>
       )}
-      {status === "error" && <p className="mt-2 text-xs text-red-600">{error}</p>}
-      <button type="submit" disabled={status === "loading"} className={`${buttonClass} mt-3`}>
+      {status === "error" && <p className="text-xs text-red-600">{error}</p>}
+      <button type="submit" disabled={status === "loading"} className={buttonClass}>
         {status === "loading" ? "Please wait..." : step === "phone" ? "Send code" : "Verify code"}
       </button>
     </form>

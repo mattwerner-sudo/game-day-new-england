@@ -3190,3 +3190,33 @@ not "wiring" - left for a real product decision plus real enrollment, not silent
 a note.
 
 `tsc --noEmit` clean, full suite 94/94 passing (89 + 5 new). Committed and pushed.
+
+## 50. Session log: 2026-08-15 (continued) — sign-up/sign-in redesigned: 3 stacked auth methods
+into one tabbed switcher
+
+Founder flagged the sign-up page as "ugly UX" via a real mobile screenshot. Root cause, confirmed
+by reading `SignUpForm.tsx`/`SignInForm.tsx`: all three auth methods (password, email code, phone
+code) were rendered as three separate full bordered boxes stacked vertically, each with its own
+heading and its own full-width orange button - three identically-weighted primary CTAs in a row,
+with no visual indication of which to pick despite the subtitle literally saying "pick whichever
+way is easiest." On the 375px mobile screenshot this pushed "Already have an account? Sign in"
+below the fold entirely.
+
+**Fix**: replaced the three stacked boxes with a single tabbed switcher showing exactly one
+method's form at a time - reusing the exact `<nav>`/pill pattern already live on the homepage's
+Today/This Weekend/Next 7 Days date-range selector (`src/app/page.tsx`), rather than inventing a
+new visual pattern. Password is the default tab (first, most familiar). Also added real visible
+`<label>`s above each field (previously placeholder-only, which loses context once a user starts
+typing) and moved "Continue with Google" below a divider as a clearly secondary action. Applied
+identically to both `SignUpForm.tsx` and `SignInForm.tsx` for consistency. No backend/auth logic
+touched at all - purely a rendering/layout change, same Better Auth calls as before.
+
+Verified on a real mobile viewport (375x812, matching the founder's screenshot): all three tabs
+fit on one line, only one form and one orange button visible at a time, "Sign in" link now visible
+without scrolling. Tab-switching itself was verified via a direct DOM `click()` dispatch rather
+than the browser tool's `computer` click action, which hit a repeated pane-timeout unrelated to
+this code (screenshots/`read_page` worked fine throughout, `computer` click specifically stalled) -
+confirmed via `read_page`'s interactive-element listing that the buttons/inputs were structurally
+correct regardless. `tsc --noEmit` clean, full suite still 94/94 (no test coverage exists for
+these client components - matches this project's established testing boundary of unit-testing
+pure logic, not React component rendering).
