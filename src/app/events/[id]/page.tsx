@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getEventById, WeekendEvent } from "@/db/queries";
 import { formatGender, formatSport, formatLocation, formatParticipants, eventTitle } from "@/lib/format";
-import { resolveEmbed } from "@/lib/embed";
+import { resolveEmbed, resolveTicketEmbed } from "@/lib/embed";
 
 const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL ?? "http://localhost:3000";
 
@@ -100,6 +100,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   if (!event) notFound();
 
   const embed = resolveEmbed(event.streamingVideoUrl);
+  const ticketEmbed = resolveTicketEmbed(event.ticketUrl);
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
@@ -184,9 +185,20 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           </div>
         )}
 
+        {ticketEmbed && (
+          <div className="mt-6">
+            <p className="mb-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              Buy tickets
+            </p>
+            <div className="h-[600px] w-full overflow-hidden rounded-lg border border-zinc-200 dark:border-zinc-800">
+              <iframe src={ticketEmbed.url} className="h-full w-full border-0" loading="lazy" />
+            </div>
+          </div>
+        )}
+
         {(event.ticketUrl || event.sourceUrl || event.streamingVideoUrl || event.streamingAudioUrl) && (
           <div className="mt-6 flex flex-wrap gap-2">
-            {event.ticketUrl && (
+            {event.ticketUrl && !ticketEmbed && (
               <a
                 href={event.ticketUrl}
                 target="_blank"

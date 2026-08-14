@@ -54,3 +54,37 @@ export function resolveEmbed(url: string | null): EmbedInfo | null {
 
   return null;
 }
+
+/**
+ * Vivenu (a real ticketing platform, white-labeled per school under each school's own domain -
+ * "tickets.saintanselmhawks.com", "bryanttickets.com", etc. - no shared domain suffix to
+ * pattern-match generically the way YouTube/Hudl have). Confirmed via direct header checks that
+ * it sends no X-Frame-Options or CSP frame-ancestors on any of these, and via an actual rendered
+ * iframe test that the full purchase flow (seat selection, cart, checkout) works entirely inside
+ * a cross-origin iframe without breaking out.
+ *
+ * Deliberately an explicit allowlist, not a heuristic like "starts with tickets." - several of
+ * the *blocked* ticket vendors in this data (tickets.brown.edu, tickets.dartmouth.edu,
+ * tickets.goholycross.com) share that exact naming pattern, so guessing by domain shape would
+ * misfire. Only domains individually verified end-to-end are listed here; add a new one only
+ * after the same real check (curl -I for the headers, then an actual iframe render), not by
+ * assuming another school "probably" uses the same platform.
+ */
+const VIVENU_TICKET_DOMAINS = new Set([
+  "tickets.saintanselmhawks.com",
+  "bryanttickets.com",
+  "tickets.merrimackathletics.com",
+]);
+
+/** Resolves a ticket URL to an in-app-embeddable iframe src, or null if it isn't one. */
+export function resolveTicketEmbed(url: string | null): EmbedInfo | null {
+  if (!url) return null;
+  let host: string;
+  try {
+    host = new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+  if (VIVENU_TICKET_DOMAINS.has(host)) return { url, label: "Buy Tickets" };
+  return null;
+}
