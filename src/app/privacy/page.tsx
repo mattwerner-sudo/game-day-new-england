@@ -88,6 +88,21 @@ export default function PrivacyPage() {
           </section>
 
           <section>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+              Chrome extension
+            </h2>
+            <p className="mt-2">
+              The Game Day New England Chrome extension doesn&apos;t collect or transmit any
+              personal information. It fetches the same public schedule data available on this
+              site from our public API. If you pick a school filter, that choice is saved only in
+              your own browser&apos;s local storage (via Chrome&apos;s <code>storage</code>{" "}
+              permission) - it never leaves your device except as a school ID in the API request
+              used to filter what&apos;s shown. Uninstalling the extension removes that saved
+              preference.
+            </p>
+          </section>
+
+          <section>
             <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">Cookies</h2>
             <p className="mt-2">
               We use one cookie: a session cookie that keeps you signed in. We don&apos;t use

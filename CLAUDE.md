@@ -3684,3 +3684,17 @@ do. But everything the popup's own code actually *does* once installed is now ve
 assumed. `tsc --noEmit` clean, full suite still 117/117 (no new pure-logic function on the Next.js
 side; the extension's own JS has no automated test harness - a small, isolated file, verified
 interactively instead, matching this project's existing testing-boundary convention for UI code).
+
+## 59. Session log: 2026-08-17 (continued) — Chrome Web Store submission prep
+
+Founder wants the extension actually published. Two real limits worth being explicit about: an
+agent can't create the founder's own Chrome Web Store developer account or pay its one-time $5
+registration fee (an account-creation/payment action, outside what this session can do), and
+can't drive `chrome://extensions` → Load unpacked → the store's own upload form (OS file pickers,
+a real account session). Both stay the founder's to do. Everything else - prepared here.
+
+**Added a "Chrome extension" section to `/privacy`** - Chrome Web Store review checks that a
+listing's linked privacy policy actually covers the extension's real data practices, not just the
+main product's. States plainly what's true: no personal data collected or transmitted, a school
+filter choice (if any) saved only in the browser's own local storage, never leaves the device
+except as a school id in the API request that already has to happen to filter results.
