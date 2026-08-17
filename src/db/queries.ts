@@ -15,9 +15,13 @@ const homeSchools = alias(schools, "home_schools");
 const awaySchools = alias(schools, "away_schools");
 
 /** Left-joined school columns are nullable regardless of the underlying not-null constraint. */
-function resolveLogo(websiteUrl: string | null, cmsPlatform: string | null): string | null {
+function resolveLogo(
+  schoolName: string | null,
+  websiteUrl: string | null,
+  cmsPlatform: string | null
+): string | null {
   if (!websiteUrl || !cmsPlatform) return null;
-  return getSchoolLogoUrl(websiteUrl, cmsPlatform);
+  return getSchoolLogoUrl(schoolName, websiteUrl, cmsPlatform);
 }
 
 export interface WeekendEvent {
@@ -155,8 +159,8 @@ async function getFilteredEventsUncached(
 
   return rows.map((r) => ({
     ...r,
-    homeSchoolLogoUrl: resolveLogo(r.homeSchoolWebsiteUrl, r.homeSchoolCmsPlatform),
-    awaySchoolLogoUrl: resolveLogo(r.awaySchoolWebsiteUrl, r.awaySchoolCmsPlatform),
+    homeSchoolLogoUrl: resolveLogo(r.homeSchoolName, r.homeSchoolWebsiteUrl, r.homeSchoolCmsPlatform),
+    awaySchoolLogoUrl: resolveLogo(r.awaySchoolName, r.awaySchoolWebsiteUrl, r.awaySchoolCmsPlatform),
   }));
 }
 
@@ -224,8 +228,8 @@ export async function getEventById(id: string): Promise<EventDetail | null> {
     ...rows[0],
     startDatetime: new Date(rows[0].startDatetime),
     specialVenueName: resolveSpecialVenue(rows[0].venueName),
-    homeSchoolLogoUrl: resolveLogo(rows[0].homeSchoolWebsiteUrl, rows[0].homeSchoolCmsPlatform),
-    awaySchoolLogoUrl: resolveLogo(rows[0].awaySchoolWebsiteUrl, rows[0].awaySchoolCmsPlatform),
+    homeSchoolLogoUrl: resolveLogo(rows[0].homeSchoolName, rows[0].homeSchoolWebsiteUrl, rows[0].homeSchoolCmsPlatform),
+    awaySchoolLogoUrl: resolveLogo(rows[0].awaySchoolName, rows[0].awaySchoolWebsiteUrl, rows[0].awaySchoolCmsPlatform),
   };
 }
 
@@ -378,8 +382,8 @@ export async function getUpcomingEventsForFollows(
 
   return rows.map((r) => ({
     ...r,
-    homeSchoolLogoUrl: resolveLogo(r.homeSchoolWebsiteUrl, r.homeSchoolCmsPlatform),
-    awaySchoolLogoUrl: resolveLogo(r.awaySchoolWebsiteUrl, r.awaySchoolCmsPlatform),
+    homeSchoolLogoUrl: resolveLogo(r.homeSchoolName, r.homeSchoolWebsiteUrl, r.homeSchoolCmsPlatform),
+    awaySchoolLogoUrl: resolveLogo(r.awaySchoolName, r.awaySchoolWebsiteUrl, r.awaySchoolCmsPlatform),
   }));
 }
 

@@ -3266,3 +3266,62 @@ resolved via `opponentNameRaw` fallback text, not a real team link, confirmed vi
 query) - the exact same "didn't resolve to a seeded school" case this file's `homeSchoolName`
 coalesce already handles, so no logo is the correct behavior, not a defect. `tsc --noEmit` clean,
 full suite 99/99 (94 + 5 new).
+
+## 52. Session log: 2026-08-15 (continued) — Presto school logos (curated allowlist) + a real
+SSR image-fallback bug fixed
+
+Founder asked for more logo coverage and specifically pointed at sportslogos.net
+(sportslogos.net/leagues/list_by_sport/6/College-Logos/) as a possible source. Checked the site
+directly before building anything against it, and declined: its own footer states it plainly -
+*"SportsLogos.Net does not own any of the team, league or event logos... we do not have the power
+to grant usage rights to anyone... maintained for research, educational, and historical purposes
+only, do not abuse it."* Hotlinking/scraping a third-party archive that explicitly disclaims usage
+rights is a materially different, higher-risk thing than Section 51's approach (linking to a logo
+a school hosts on its *own* official site, which the school itself controls and displays) -
+especially for a product already building toward ad/sponsor revenue. Founder agreed with staying
+on the official-source approach once this was explained.
+
+**Extended Section 51's same trust model to the 15 Presto schools** (85 SIDEARM schools were
+already fully covered). Confirmed directly, no universal path exists for Presto the way SIDEARM's
+`/images/logos/site/site.png` is - each school uploads its own logo under its own filename via
+its own admin panel. Checked each of the 15 individually via direct fetch, looking for either a
+`<meta name="profile-site-logo">` tag (found on some) or a real nav `<img>` whose alt text matches
+the school's own name (not a generic/other-school image - caught one real near-miss where
+Bridgewater's homepage carousel of *other* MASCAC schools' logos would have been mismatched as
+Bridgewater's own had the alt text not been checked). Ended up with **6 confirmed, individually
+verified real logos** added to a new curated `PRESTO_SCHOOL_LOGOS` allowlist in
+`src/lib/schoolLogo.ts` (Bridgewater State, CCSU, Albertus Magnus, Regis, Mount Holyoke, Lasell) -
+same allowlist discipline as `VIVENU_TICKET_DOMAINS`/`SPECIAL_VENUES`.
+
+**Two real findings from this verification pass, both handled rather than pushed through:**
+1. **6 of the 15 Presto schools sit behind an AWS WAF bot challenge that blocks even a real
+   browser render**, not just a plain fetch (Curry, Endicott, Suffolk, Wentworth, Lesley, Vermont
+   State-Johnson - the same WAF issue already documented for feed ingestion). Deliberately not
+   pursued further - defeating that would mean bypassing bot detection, which this session declined
+   to do regardless of the (legitimate) underlying goal. Those schools simply have no logo.
+2. **The verification requests themselves visibly triggered rate-limiting** - a school that
+   returned a clean 200 response minutes earlier started returning the same WAF challenge on a
+   later retry, and the shared `cdn.prestosports.com` asset host started 403-ing entirely. Stopped
+   further probing once this was noticed rather than continuing to escalate it (a real,
+   observed operational risk: this shared PrestoSports hosting infrastructure is sensitive to
+   request volume, and hammering it isn't cost-free even for a legitimate check - it could affect
+   this app's own future feed ingestion from the same hosts). `PRESTO_SCHOOL_LOGOS`'s own comment
+   flags this so a future session adds entries manually and sparingly, not via an automated crawl.
+
+**Real bug found and fixed during live verification, not assumed fine**: the rate-limited CCSU
+logo request surfaced a genuine React SSR race condition in `SchoolLogo.tsx` - a server-rendered
+`<img>` starts loading `src` the moment the browser parses the initial HTML, before React
+hydrates and attaches the `onError` handler; a fast failure (confirmed live: the WAF challenge
+page loading instead of the image) can complete and fire its error event before any handler
+exists to catch it, and that already-fired event is never replayed. The original `onError`-only
+implementation left a broken-image icon visible in exactly this case. Fixed by also checking
+`img.complete && naturalWidth === 0` in a `useEffect` on mount (catches failures that happened
+before hydration), keeping `onError` for failures that happen after. Verified both branches live:
+the currently-rate-limited CCSU/Regis logos correctly render nothing (confirmed 0 `<img>` tags in
+the DOM via a script-injected check, not just eyeballing), and unrelated, unaffected SIDEARM
+logos (Bryant, New Haven) still render correctly on the same page load.
+
+`getSchoolLogoUrl`'s signature changed to take the school's name (needed to look up the Presto
+allowlist) alongside the existing `websiteUrl`/`cmsPlatform` params - all three call sites in
+`src/db/queries.ts` updated accordingly. 7 new/updated unit tests. `tsc --noEmit` clean, full
+suite 101/101 (99 + 2 new).
