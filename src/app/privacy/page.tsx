@@ -1,6 +1,10 @@
 import Link from "next/link";
 
 const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? "[mailing address not yet configured]";
+// Same "founder-supplied, not yet configured" bucket as MAILING_ADDRESS - the product name
+// ("Game Day New England") isn't necessarily the same as the registered business entity that
+// legally operates it, and a privacy policy should name who "we" actually is.
+const LEGAL_ENTITY_NAME = process.env.LEGAL_ENTITY_NAME ?? "[legal entity name not yet configured]";
 const LAST_UPDATED = "August 17, 2026";
 
 export const metadata = { title: "Privacy Policy | Game Day New England" };
@@ -19,6 +23,9 @@ export default function PrivacyPage() {
           Privacy Policy
         </h1>
         <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Last updated: {LAST_UPDATED}</p>
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">
+          Game Day New England is operated by {LEGAL_ENTITY_NAME} (&quot;we&quot;, &quot;us&quot;).
+        </p>
 
         <div className="mt-6 space-y-6 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
           <section>
@@ -81,6 +88,27 @@ export default function PrivacyPage() {
           </section>
 
           <section>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">Cookies</h2>
+            <p className="mt-2">
+              We use one cookie: a session cookie that keeps you signed in. We don&apos;t use
+              analytics, advertising, or tracking cookies, and we don&apos;t share cookie data with
+              any third party.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+              Children&apos;s privacy
+            </h2>
+            <p className="mt-2">
+              Game Day New England is not directed to children under 13, and we do not knowingly
+              collect personal information from anyone under 13. If we learn that we&apos;ve
+              collected information from a child under 13, we&apos;ll delete it. If you believe a
+              child has created an account, contact us using the information below.
+            </p>
+          </section>
+
+          <section>
             <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">Your choices</h2>
             <p className="mt-2">
               You can update what you follow, or stop email/text alerts, from your{" "}
@@ -106,6 +134,8 @@ export default function PrivacyPage() {
             <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">Contact</h2>
             <p className="mt-2">
               Questions about this policy or your data:
+              <br />
+              {LEGAL_ENTITY_NAME}
               <br />
               {MAILING_ADDRESS}
             </p>

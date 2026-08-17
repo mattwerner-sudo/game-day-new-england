@@ -3490,3 +3490,37 @@ self-serve version is a reasonable next step), and MFA/2FA. `tsc --noEmit` clean
 110/110 unaffected (no new pure-logic functions warranted new unit tests this pass - the new
 surface is entirely page/form components and a schema addition, matching this project's existing
 testing-boundary convention).
+
+**Verified live in production, not just locally**: after deploying, confirmed `/privacy` and the
+"Forgot your password?" link render on the real site, then proved the rate-limit fix actually
+works where it matters (not just that it's configured) - triggered a real `/forgot-password`
+request against production and found the resulting row directly in Neon's `rate_limits` table
+(`key: "{real IP}|/request-password-reset", count: 1`), not just a local/simulated check.
+
+**Follow-up same day**: founder asked whether the privacy policy follows best practice and
+"protects me legally," linking a commerce.gov privacy-laws page. Read that page directly rather
+than assume - it's entirely federal-agency guidance (Privacy Act of 1974, FISMA, OMB memoranda,
+FOIA), not a commercial-website benchmark; the one item on it actually relevant to this app is
+COPPA. Gave an honest answer distinguishing two different questions the founder was conflating:
+a privacy policy is a disclosure document (reduces FTC deceptive-practices risk if accurate;
+doesn't limit liability), not a liability shield - that's what a Terms of Service (which doesn't
+exist yet) plus proper business entity formation would actually provide. Recommended real
+attorney review given this app collects PII and sends marketing communications - explicitly not
+something this session can substitute for.
+
+**Closed the three mechanical (non-legal-judgment) gaps identified in that review**, all in
+`src/app/privacy/page.tsx`:
+- A **children's privacy / COPPA** section - states the service isn't directed at under-13s and
+  describes what happens if under-13 data is discovered.
+- A **cookies** section - confirmed directly (grepped the codebase) that no analytics/tracking
+  tooling exists at all (no Google Analytics, Vercel Analytics, PostHog, etc.) before writing this,
+  so the policy accurately states the app uses only the essential auth session cookie.
+- A named **legal entity**, via a new `LEGAL_ENTITY_NAME` env var (same "founder-supplied,
+  not-yet-configured" bucket as `MAILING_ADDRESS`) - the product name isn't necessarily the
+  registered business name, and a policy should say who "we" actually is. Shows the placeholder
+  honestly until the founder sets a real value, matching this codebase's established convention
+  for not-yet-configured founder-owned facts.
+
+Verified rendering via `get_page_text` after the interactive browser pane hit the same known
+flakiness as earlier this session (screenshots/clicks stalling, text extraction unaffected).
+`tsc --noEmit` clean, full suite still 110/110.
