@@ -3357,3 +3357,62 @@ logos (Bryant, New Haven) still render correctly on the same page load.
 allowlist) alongside the existing `websiteUrl`/`cmsPlatform` params - all three call sites in
 `src/db/queries.ts` updated accordingly. 7 new/updated unit tests. `tsc --noEmit` clean, full
 suite 101/101 (99 + 2 new).
+
+## 53. Session log: 2026-08-15 (continued) — real duplicate-game bug found by the founder,
+root-caused, and a general reconciliation tool built
+
+Founder spotted a real duplicate on the live site: the same Stonehill @ Boston University field
+hockey game appearing as two separate event rows ("Stonehill College at Boston University" and
+"Stonehill at Boston University"). Root-caused directly against the actual two rows, not
+guessed: BU's own SIDEARM feed had already listed this game on 8/12 (before Stonehill existed in
+this app's `schools` table), so the opponent came in as unresolved raw text
+(`opponentNameRaw: "Stonehill"`, no `awayTeamId`). When Stonehill's own feed was ingested two
+days later (Section 48), it reported the same real game but named itself by its own official name,
+"Stonehill College" - a different string. `computeDedupeKey()` is built from home/away NAME text
+specifically so two schools' feeds *can* collapse into one row (`sidearm/normalize.ts`'s own
+comment on that function) - but only when both feeds use matching text. Two different name
+variants for the same opponent produce two different dedupe keys, so the second ingest inserted a
+new row instead of updating the first.
+
+**Scoped the damage before fixing anything**: a targeted check for Stonehill/New Haven
+specifically found exactly 20 real duplicate pairs (1 self-matching false positive filtered out
+of an initial 21). Confirmed none were referenced by any real `gameFollows`/`fanAlertLog` row
+before touching anything.
+
+**Built `src/ingestion/reconcile.ts`** (`reconcileOrphanedOpponents`, plus a pure, directly
+unit-tested `findDuplicateMatch`) rather than just hand-fixing these 20 - this exact mechanism can
+recur for *any* two schools whose feeds disagree on naming, not just Stonehill/New Haven, so a
+one-off fix would leave the same bug live for the next school onboarded (or the next home/away
+name variant already sitting in the data). Merges an "orphan" row (one side unresolved, real raw
+text) into a "resolved" row (both sides real teams) for the same real game, then deletes the
+orphan - backfilling any of the orphan's non-null fields (`ticketUrl`/`sourceUrl`/`tvNetwork`/
+etc.) the resolved row is missing first, and skipping (not force-deleting) any row a real user has
+already followed or been alerted about.
+
+**A real false-positive class was caught during verification, not shipped blind.** An early
+version matched purely on (exact `startDatetime` + `sport` + `gender` + a shared team on either
+side) - looked right for the Stonehill case, but running it against the real full table found
+**1,365 "duplicates,"** wildly more than expected. Manually inspecting a sample found the bug
+immediately: two of the first three were multi-team meets (a swim triangular where Williams
+legitimately plays both MIT *and* NYU at the same meet time - two different real games sharing a
+team/date/sport/gender, not one game). Fixed by additionally requiring the orphan's raw opponent
+text to plausibly name the *other* side of the candidate row specifically (via a loose,
+`(...)`-qualifier-stripping substring check - "Stonehill" vs "Stonehill College", "Trinity
+College (Conn.)" vs "Trinity College") - not just "shares a team," which is what let the
+multi-team-meet rows through. Re-ran against the real table: **38 genuine pairs**, all
+name-variant duplicates (spot-checked 5 by hand: "Saint Joseph's (Me.)" vs "Saint Joseph's
+College of Maine", "Emmanuel (Mass.)" vs "Emmanuel College", "Johnson & Wales (RI)" vs "Johnson &
+Wales University (Providence)," etc.) - the false-positive pattern is now a permanent regression
+test in `reconcile.test.ts`.
+
+**New `scripts/reconcile.ts`** - defaults to a dry run (prints the merge/delete plan only); real
+writes need an explicit `--apply` flag, on top of the founder needing to run it at all (a bulk
+delete against Neon, even backed by this verification, was correctly blocked by the auto-mode
+safety classifier when this session tried to run it directly - same pattern as Section 44's
+blocked bulk delete). **Recommended workflow going forward: run `scripts/reconcile.ts --apply`
+after onboarding any new school**, not just this once - documented here so a future session
+doesn't have to rediscover this need from scratch. 10 unit tests, `tsc --noEmit` clean, full
+suite 110/110.
+
+**Not yet applied to Neon as of this entry** - the 38 real pairs are identified and verified, but
+deletion needs the founder to run `scripts/reconcile.ts --apply` themselves.
