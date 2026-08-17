@@ -3575,3 +3575,23 @@ side is Northeast-10, even though Dartmouth itself is Ivy League - confirmed thi
 league-filter's real either-side-matches behavior, not a bug); `/sitemap.xml` produces valid XML
 listing every school/league URL; an invalid slug correctly 404s. `tsc --noEmit` clean, full suite
 117/117 (110 + 7 new: 6 slug tests, 1 season-range test).
+
+## 56. Session log: 2026-08-17 (continued) — list-view "Buy Tickets" stays in-app for embeddable games
+
+Founder checked which real upcoming games are actually embeddable (5 of 296 ticketed games right
+now, all Saint Anselm home football - Bryant/Merrimack are on the same verified allowlist but
+have no upcoming game with a ticket URL populated yet) and noticed the homepage/school/league
+list views still always opened "Buy Tickets" as an external new-tab link, even for those 5 -
+unlike the event detail page, which already embeds the real checkout (Section 47). The list
+views never checked embeddability at all before deciding how to render the button.
+
+Fixed in `EventList.tsx` (the one shared component behind the homepage, `/schools/[slug]`, and
+`/leagues/[slug]` - Section 55's extraction meant this one change covers all three list surfaces
+at once): when `resolveTicketEmbed(event.ticketUrl)` resolves, "Buy Tickets" becomes a plain
+in-app `<Link>` to that game's own page (where the real embed lives) instead of an external
+`target="_blank"` link - every non-embeddable ticket url is untouched, still opens externally
+with its UTM tag intact. Verified live: Saint Anselm's schedule page shows 5 internal
+`/events/{id}` links and 2 correctly-still-external ones (Etix, a Constant Contact link) side by
+side, and clicking through to one of the 5 shows the real Vivenu checkout rendering in place.
+`tsc --noEmit` clean, full suite still 117/117 (no new pure-logic function - `resolveTicketEmbed`
+already had its own tests from Section 47).

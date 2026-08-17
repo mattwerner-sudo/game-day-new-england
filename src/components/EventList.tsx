@@ -2,6 +2,7 @@ import Link from "next/link";
 import { WeekendEvent } from "@/db/queries";
 import { formatGender, formatSport, formatDay, formatTime, formatLocation, formatParticipants } from "@/lib/format";
 import { withTicketAffiliateTag } from "@/lib/affiliate";
+import { resolveTicketEmbed } from "@/lib/embed";
 import { SchoolLogo } from "@/components/SchoolLogo";
 
 /**
@@ -39,7 +40,9 @@ export function EventList({ events, emptyMessage }: { events: WeekendEvent[]; em
             {day}
           </h2>
           <ul className="space-y-2">
-            {dayEvents.map((event) => (
+            {dayEvents.map((event) => {
+              const ticketEmbed = resolveTicketEmbed(event.ticketUrl);
+              return (
               <li
                 key={event.id}
                 className="rounded-xl border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950"
@@ -94,14 +97,26 @@ export function EventList({ events, emptyMessage }: { events: WeekendEvent[]; em
                 {(event.ticketUrl || event.sourceUrl || event.streamingVideoUrl || event.streamingAudioUrl) && (
                   <div className="mt-3 flex flex-wrap gap-2">
                     {event.ticketUrl && (
-                      <a
-                        href={withTicketAffiliateTag(event.ticketUrl)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700"
-                      >
-                        Buy Tickets
-                      </a>
+                      ticketEmbed ? (
+                        // Real in-app checkout exists on this game's own page (Section 47) -
+                        // stay in-app instead of opening the vendor's site in a new tab, unlike
+                        // the plain external link below for every non-embeddable vendor.
+                        <Link
+                          href={`/events/${event.id}`}
+                          className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700"
+                        >
+                          Buy Tickets
+                        </Link>
+                      ) : (
+                        <a
+                          href={withTicketAffiliateTag(event.ticketUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700"
+                        >
+                          Buy Tickets
+                        </a>
+                      )
                     )}
                     {event.streamingVideoUrl && (
                       <a
@@ -136,7 +151,8 @@ export function EventList({ events, emptyMessage }: { events: WeekendEvent[]; em
                   </div>
                 )}
               </li>
-            ))}
+              );
+            })}
           </ul>
         </section>
       ))}
