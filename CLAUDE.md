@@ -3698,3 +3698,14 @@ listing's linked privacy policy actually covers the extension's real data practi
 main product's. States plainly what's true: no personal data collected or transmitted, a school
 filter choice (if any) saved only in the browser's own local storage, never leaves the device
 except as a school id in the API request that already has to happen to filter results.
+
+**Built real assets, not mockups, in `chrome-extension/store-assets/`**: a submission-ready
+`gdne-extension-v1.0.0.zip` (manifest + popup + icons only, no dev files); a 1280x800 store
+screenshot composited around an *actual* headless-Chrome capture of the real popup rendering real
+live production data (`google-chrome --headless --virtual-time-budget=4000 ...` - the first
+attempt without a virtual-time budget captured the "Loading…" state before the async fetch
+finished, caught by looking at the output rather than assuming the flag wasn't needed); a
+440x280 promotional tile generated with Pillow, on-brand; and `SUBMISSION_PACKET.md` with the
+exact listing copy, permission justifications, and privacy-practices answers ready to paste into
+the dashboard. Everything needed to submit is prepared - creating the developer account, paying
+its $5 fee, and clicking submit are the founder's own account/payment actions to take.
