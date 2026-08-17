@@ -1,0 +1,31 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Game Day New England</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <span class="title">🏆 Game Day New England</span>
+      <a href="https://game-day-new-england.vercel.app" target="_blank" rel="noopener" class="site-link">Full site ↗</a>
+    </header>
+
+    <div class="controls">
+      <div class="range-tabs" id="range-tabs">
+        <button type="button" data-range="today">Today</button>
+        <button type="button" data-range="weekend" class="active">Weekend</button>
+        <button type="button" data-range="week">Next 7 Days</button>
+      </div>
+      <select id="school-select">
+        <option value="">All schools</option>
+      </select>
+    </div>
+
+    <div id="content">
+      <p class="status">Loading…</p>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>

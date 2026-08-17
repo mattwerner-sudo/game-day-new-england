@@ -3626,3 +3626,48 @@ that the link lands on the real game page (with its embedded ticket checkout, Se
 Also checked a school-only filter (correctly found a different next match) and a division+state
 filter with no school/sport (D1 + VT, correctly found UVM's next game) - not just the one
 originally-reported case. `tsc --noEmit` clean, full suite still 117/117.
+
+## 58. Session log: 2026-08-17 (continued) — public JSON API (v1) + a first Chrome extension
+
+Founder asked how to make this a Chrome extension. Recommended against the simplest option
+(iframing the live site in a popup - confirmed technically possible, no `X-Frame-Options` set,
+but a full responsive page doesn't fit a ~400px popup well) in favor of a real native popup UI
+backed by structured data - which meant finally building the small public API already scoped in
+Section 0.12 and never started, since the extension needs *something* to fetch.
+
+**New `src/app/api/v1/events` and `src/app/api/v1/schools`** - public, unauthenticated, CORS open
+(`Access-Control-Allow-Origin: *`, since this is the same data already rendered on every public
+page - nothing sensitive, and a `chrome-extension://` origin has no fixed value to allowlist
+anyway). `/events` mirrors the homepage's own filter vocabulary exactly (`range`/`date`/
+`division`/`state`/`school`/`sport`/`league`, reusing `getFilteredEvents`/`DateRange`/
+`EventFilters` as-is) rather than inventing a second one.
+
+**Real leak caught before shipping, not after**: the first version of `/events` serialized
+`WeekendEvent` rows directly, which silently carried internal-only fields
+(`homeSchoolWebsiteUrl`/`homeSchoolCmsPlatform`, etc. - used internally to resolve `logoUrl`,
+Section 51) into the public JSON response, because TS's structural typing doesn't strip extra
+untyped fields off an object. Caught by actually hitting the endpoint and reading the real
+response, not by inspecting the code alone. Fixed with an explicit `toPublicEvent()` allowlist
+rather than a raw pass-through.
+
+**New `chrome-extension/` directory** - Manifest V3, a vanilla-JS popup (no build step/framework -
+this is a small, self-contained surface, not worth a bundler), simple icons generated locally via
+Pillow (an orange/white "GD" monogram matching the site's brand color, no existing app icon asset
+to reuse). Shows the current range (Today/Weekend/Next 7 Days) with a school filter that persists
+across opens via `chrome.storage.local`; clicking a game opens its real page on the live site in a
+new tab rather than trying to reproduce ticket/streaming embeds inside the tiny popup itself.
+
+**Verified what could be verified from here, flagged what couldn't.** Confirmed both API
+endpoints live against the real dev server, including confirming the leak fix actually took
+effect (one false alarm along the way - a stale *browser* cache on the first re-check, not a code
+problem, resolved with a cache-busting query param). Served the extension folder locally and
+loaded `popup.html` directly to check its layout and fetch/render logic - this surfaced a real,
+expected gap: the popup correctly failed against `api/v1/*` with a 404 because those routes
+existed only on the local dev server, not yet pushed to production. Committing this section
+together with the API routes closes that gap. **What this session's tools cannot verify at all**:
+the actual `chrome://extensions` → "Load unpacked" → click-the-toolbar-icon flow, which needs a
+real Chrome install and OS-level file picker - the founder needs to do that load-and-click step
+themselves; the popup's core logic (data fetch, rendering, range/school switching) was verified,
+its behavior *as an installed extension* was not. `tsc --noEmit` clean, full suite still 117/117
+(no new pure-logic function on the Next.js side; the extension's own JS has no test harness set up
+- a small, isolated JS file, matching this project's precedent of not testing UI rendering code).

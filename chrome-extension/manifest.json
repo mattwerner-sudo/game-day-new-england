@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "Game Day New England",
+  "version": "1.0.0",
+  "description": "This weekend's New England college sports schedule, right in your browser.",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "host_permissions": ["https://game-day-new-england.vercel.app/*"],
+  "permissions": ["storage"]
+}
