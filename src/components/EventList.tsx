@@ -21,7 +21,13 @@ function groupByDay(events: WeekendEvent[]): Map<string, WeekendEvent[]> {
   return groups;
 }
 
-export function EventList({ events, emptyMessage }: { events: WeekendEvent[]; emptyMessage: string }) {
+export function EventList({
+  events,
+  emptyMessage,
+}: {
+  events: WeekendEvent[];
+  emptyMessage: React.ReactNode;
+}) {
   if (events.length === 0) {
     return (
       <div className="rounded-xl border border-zinc-200 bg-white p-8 text-center dark:border-zinc-800 dark:bg-zinc-950">

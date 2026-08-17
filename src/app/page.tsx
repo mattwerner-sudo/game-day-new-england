@@ -10,7 +10,7 @@ import {
   EventFilters,
 } from "@/db/queries";
 import { EventList } from "@/components/EventList";
-import { formatSport } from "@/lib/format";
+import { formatSport, formatDay, eventTitle } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +78,15 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
     getFilterOptions(),
   ]);
   const { start, end } = getRangeWindow(range, anchorDate);
+
+  // The date range and the who/what filters are independent - a real, valid combination (e.g.
+  // "Saint Anselm football") can look broken if the currently-selected window just doesn't
+  // happen to contain it, with no indication why. Rather than a dead end, look ahead (unbounded
+  // by the visible range) and point at the actual next match, same style as a booking site's
+  // "no rooms these dates - next available X" pattern. Only queried in the empty+filtered case,
+  // not on every page view.
+  const nextMatch =
+    events.length === 0 && hasFilters ? (await getFilteredEvents("season", filters)).at(0) ?? null : null;
 
   const prevMonth = new Date(start.getFullYear(), start.getMonth() - 1, 1);
   const nextMonth = new Date(start.getFullYear(), start.getMonth() + 1, 1);
@@ -297,9 +306,28 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
 
         <EventList
           events={events}
-          emptyMessage={`No games ${
-            range === "today" ? "today" : range === "week" ? "in the next 7 days" : range === "month" ? "that month" : "this weekend"
-          }${hasFilters ? " match your filters" : ""} across the ${filterOptions.schools.length} schools currently covered. Most varsity seasons run fall (Aug–Nov), winter (Nov–Mar), and spring (Mar–May) — check back closer to the season, widen ingestion coverage, or adjust your filters.`}
+          emptyMessage={
+            nextMatch ? (
+              <>
+                No games {range === "today" ? "today" : range === "week" ? "in the next 7 days" : range === "month" ? "that month" : "this weekend"} match your filters.
+                <br />
+                <span className="mt-1 inline-block">
+                  Next match: {formatDay(nextMatch.startDatetime)} — {eventTitle(nextMatch)}
+                </span>
+                <br />
+                <Link
+                  href={`/events/${nextMatch.id}`}
+                  className="mt-2 inline-block font-medium text-orange-600 hover:underline dark:text-orange-400"
+                >
+                  View game →
+                </Link>
+              </>
+            ) : (
+              `No games ${
+                range === "today" ? "today" : range === "week" ? "in the next 7 days" : range === "month" ? "that month" : "this weekend"
+              }${hasFilters ? " match your filters" : ""} across the ${filterOptions.schools.length} schools currently covered. Most varsity seasons run fall (Aug–Nov), winter (Nov–Mar), and spring (Mar–May) — check back closer to the season, widen ingestion coverage, or adjust your filters.`
+            )
+          }
         />
       </main>
     </div>

@@ -3595,3 +3595,34 @@ with its UTM tag intact. Verified live: Saint Anselm's schedule page shows 5 int
 side, and clicking through to one of the 5 shows the real Vivenu checkout rendering in place.
 `tsc --noEmit` clean, full suite still 117/117 (no new pure-logic function - `resolveTicketEmbed`
 already had its own tests from Section 47).
+
+## 57. Session log: 2026-08-17 (continued) — homepage empty state points at the next real match
+instead of a dead end
+
+Founder sent a real screenshot of the confusion: filtering by School (Saint Anselm) + Sport
+(Football) with "This Weekend" selected showed zero results, with no indication why - the date
+range and the who/what filters are two fully independent constraints on the homepage, so a
+perfectly valid combination looks broken whenever the current window just doesn't happen to
+contain it. The `/schools/[slug]`/`/leagues/[slug]` pages (Section 55) don't have this problem
+(no date-range control at all, always "season"), but the homepage's Today/Weekend/Next 7 Days/
+Month toggle does.
+
+**Fix, same pattern a booking site uses for "no rooms these dates"**: when the active filters
+produce zero results, look ahead (unbounded by the visible window - reuses the existing `season`
+range, Section 55) for the actual next matching game and surface it directly: "No games this
+weekend match your filters. Next match: Saturday, September 12 — Bentley University at Saint
+Anselm College" with a `View game →` link straight to it. Only fires in the empty+filtered case
+(one extra query, not on every page view) - genuinely filter-less empty windows (a real off-
+season week with no filters active) still get the original generic message unchanged.
+
+Required widening `EventList`'s `emptyMessage` prop from `string` to `React.ReactNode` so it can
+carry a real link, not just text - a small, contained generalization of the Section 55 extraction
+rather than a new component.
+
+**Verified against the founder's exact scenario**, not a synthetic one: reproduced the same
+School=Saint Anselm/Sport=Football/range=weekend combination from the screenshot, confirmed it
+now shows "Next match: Saturday, September 12 - Bentley University at Saint Anselm College" and
+that the link lands on the real game page (with its embedded ticket checkout, Section 56, intact).
+Also checked a school-only filter (correctly found a different next match) and a division+state
+filter with no school/sport (D1 + VT, correctly found UVM's next game) - not just the one
+originally-reported case. `tsc --noEmit` clean, full suite still 117/117.
