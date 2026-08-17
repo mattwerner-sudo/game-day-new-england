@@ -436,6 +436,135 @@ start (a real feature - keys, tiers, rate limiting - none of which exists in the
 Founder hasn't picked a direction as of this entry; revisit before building past a v1 read-only
 endpoint.
 
+### 0.13 Where VC dollars are going in 2026, and what it means for GDNE next (added 2026-08-17)
+
+Founder asked, referencing this file plus real 2026 research on where sports-tech VC money is
+being deployed: "how else can I make this better?" A cross-check between the business plan
+already digested into this section and what the market is actually rewarding right now - not a
+relitigation of 0.8-0.12's existing findings, an addition to them.
+
+**Research findings (real 2026 sources):**
+1. Sports-tech VC is having its second-biggest year ever - $12.5B deployed through October 2025,
+   behind only 2021 ([Capstone Partners](https://www.capstonepartners.com/insights/report-sports-technology-market-update/)). General tailwind, not specific guidance.
+2. **"First-party fan-data infrastructure" is now an explicitly named, VC-recognized category**,
+   not just this founder's private thesis - investors cite cookie deprecation as "a structural
+   challenge in how every rights holder manages fan data" as one of three forces driving 2026
+   sports-tech capital ([Nixon Peabody](https://www.nixonpeabody.com/insights/articles/2026/03/24/hot-topics-in-the-middle-market-sports-investments-and-innovations)). The closest external validation 0.8's central open
+   question ("will fans register with a third party") has had - the market is independently
+   converging on "yes, this has to exist," for the same structural reason (cookies dying) the
+   fan-graph thesis (0.1, 0.4) was built on. Doesn't change any recommendation - evidence the
+   existing bet (school follows, live since Section 20) targets a real, well-funded category.
+3. **AI-powered broadcast/highlight/recap automation is the single highest-confidence sports-
+   tech investment for 2026**, cost-reduction thesis now quantifiable at scale ([Capstone Partners](https://www.capstonepartners.com/insights/report-sports-technology-market-update/)).
+   GameChanger (Dick's-owned, the closest real comparable to this product's amateur-sports-
+   aggregator shape) is rolling out AI cameras "doubling viewership in early pilots"; its
+   president calls AI "table stakes in sports" now ([reporting via buyingsandlot.com](https://www.buyingsandlot.com/p/report-major-youth-sports-streamer-could-go-public)). Maps
+   directly onto 0.3's Content Agent - the one of the plan's five agents that's both unstarted
+   and buildable by a solo founder (unlike Sponsor Match or NIL Compliance, which need real
+   sales/legal motions, not just code).
+4. **Women's and non-revenue college sports are a real, currently-surging category** - women's
+   college basketball viewership up 33% YoY, women's sports viewership overall nearly tripled
+   since 2020, global women's elite sports revenue up 340% in four years to ~$3B in 2026
+   ([World Economic Forum](https://www.weforum.org/stories/trade-and-investment/women-sport-next-global-growth-market/), [BofA Institute](https://institute.bankofamerica.com/economic-insights/women-in-sports.html)). Directly validates a differentiator this product already
+   has - Section 1's "every varsity team, not just marquee sports" coverage principle - as
+   something the market is actively rewarding right now, never yet marketed or SEO'd around
+   specifically.
+5. **Vertical AI's actual 2026 VC thesis is "small teams, one narrow thing done completely,"**
+   not broad automation - "the startups pulling premium checks... are the ones doing one
+   expensive thing completely" ([VC Cafe](https://www.vccafe.com/vertical-ai-in-2026-the-good-the-bad-and-the-ugly/), [Pulseline](https://pulseline.substack.com/p/the-18b-agent-wave-why-vertical-ai)). Direct, independent validation of 0.3's
+   five-narrow-agents operating model - and a discipline check: finish one agent well (Content
+   Agent, per #3) before starting a second.
+6. NIL data-platform investment is real and growing ($2.6B NIL economy in 2026, House Settlement
+   revenue-sharing now live - [OC&C](https://www.occstrategy.com/en/article/scoring-big-unlocking-the-nil-opportunity-in-college-sports/), [Reach Capital](https://www.reachcapital.com/resources/thought-leadership/beyond-the-game-part-1-charting-the-new-frontier-of-nil-sports-and-higher-ed/)) - doesn't change 0.8's verdict that NIL is
+   "hardest by a wide margin." Recorded for completeness; the plan's own gate sequencing (G0
+   before G3/NIL-adjacent work) holds regardless of how well-funded the category is elsewhere.
+7. **Sports Innovation Lab ([sportsilab.com](https://www.sportsilab.com/)), checked directly at the founder's request, is not
+   an investor but is real, concrete evidence for #2's fan-graph thesis.** SIL sold a "Fluid
+   Fan™ Graph" - fan intelligence from observational/transactional/deterministic data (row-level
+   transaction data including major credit/debit cards) across all teams in seven pro leagues
+   (NFL, MLB, NBA, NHL, WNBA, MLS, NWSL) - to brands/sponsors (Legends, Kellanova, NASCAR,
+   Monumental Sports) for sponsorship targeting, with Dentsu as a distribution partner. **It was
+   just acquired by Genius Sports** (NYSE: GENI) specifically "to bolster the world's most
+   advanced fan activation platform." Real implication: a completed M&A exit for a business
+   whose entire value proposition is "we own the fan graph" - the closest concrete proof point
+   that 0.1's central thesis is a real, acquirable asset class, not just an internal framing
+   choice. **Not a fit as an investor or near-term customer/partner** - SIL operates at national
+   pro-league scale with transaction-level data this product has no access to or need for, and
+   there's no sponsor-facing product yet for SIL-style data to plug into (0.8's sponsor
+   dashboard still not started). Filed as a landscape/validation reference alongside 0.9's
+   Seated/NSN/Bannerse entries, not a lead to pursue.
+8. Hudl (the closest well-funded competitor in this exact market) is on an acquisition spree
+   into adjacent products - Titan wearables (June 2025), TeamUp gamified athletic fundraising
+   (July 2026), its 19th acquisition overall ([Hudl blog](https://www.hudl.com/blog/hudl-acquires-teamup-gamified-fundraising), [Silicon Prairie News](https://siliconprairienews.com/2026/07/hudl-announces-its-19th-acquisition-adding-a-fundraising-solution-to-its-tech-suite-for-coaches/)). Not a threat to
+   this product (Hudl is coach/team-ops tooling, this is fan-facing discovery) - added to 0.9's
+   landscape watch-list as a signal of where a well-capitalized adjacent player sees value
+   (booster fundraising, wearables), filed for reference, not acted on.
+
+**What's genuinely new here vs. 0.8-0.12:** external validation for the fan-graph bet (#2, #7)
+and the five-narrow-agents model (#5) - useful for founder narrative/fundraising, not a build
+item by itself; a concretely-buildable next agent (Content Agent, #3) that wasn't previously
+prioritized since nothing pointed at it specifically; a positioning/marketing angle already
+latent in the product (#4) - women's/non-revenue breadth is already built, never surfaced as its
+own hook.
+
+**Recommendation 1 (primary): scope a minimal Content Agent, gated on a real results/scores
+feasibility check.** This product ingests full schedules but **never captures final scores/
+results at all** - `events.status` can be `"final"` but there is no score field anywhere in the
+schema. This is the "Results" half of 0.3's "Schedule & Results Agent" that was never addressed
+- a completion of an existing idea, not a new one - and the direct prerequisite for any AI-recap
+feature (#3), which is realistic "one narrow thing done completely" work (#5) for a solo founder,
+unlike broadcast-scale computer vision.
+
+Feasibility, checked live 2026-08-17: SIDEARM's ICS feed (`DESCRIPTION` field, already parsed
+for TV/streaming/ticket lines) carries no score data at all - confirmed by fetching Amherst's
+real feed. But SIDEARM's own schedule *page* embeds a structured `result` object per game in its
+initial page data - confirmed by fetching `athletics.amherst.edu/sports/football/schedule`
+directly and finding a real, consistently-shaped `"result":{"game_id":N,"status":...,
+"team_score":...,"opponent_score":...,"prescore":...,"postscore":...,"bid":...,"boxscore":...,
+"line_scores":...}` block per game, keyed by the same `game_id` already extracted from
+`sourceUrl` (the same join key already proven for the Paciolan ticket-widget work, Section 16).
+**Real, honest caveat**: every game checked had `status: null`/scores `null` - every schedule
+fetched (football preseason, default hockey schedule) happened to return only not-yet-played
+games, so a genuinely completed game's populated shape was not actually observed. The field
+names/structure are real and promising, not the actual populated values - needs one more real
+check (a school/sport confirmed to have a recently-completed game, or evidence of how score data
+is actually fetched - possibly a separate lazy client-side API call, not baked into the initial
+HTML) before committing engineering time. Presto's per-game ICS `DESCRIPTION` is already
+confirmed (Section 29) to carry no structured data beyond a summary restatement - a parallel
+Presto-side check would be needed too, not assumed symmetric.
+
+**Recommended next step, not yet started**: a short, dedicated feasibility session (same
+discipline as the Vivenu/Hudl/NEC Front Row embed pressure-tests, Sections 41/43/48) - confirm
+real populated `result` data for actually-completed games on both SIDEARM and Presto, then scope
+score ingestion (new nullable `homeScore`/`awayScore`/`boxscoreUrl` columns, purely additive)
+before any Content Agent work. The Content Agent itself (LLM-generated recap text from final
+scores + existing structured event data, gated behind a real per-generation cost check) is real
+follow-on work, not scoped in detail here - depends entirely on the scores check landing
+positive.
+
+**Recommendation 2 (cheap, do anytime): surface non-revenue/women's-sports breadth as explicit
+positioning, not just incidental coverage.** No schema/ingestion change needed - copy/SEO/content
+work on pages that already exist (Section 55's `/schools/[slug]`/`/leagues/[slug]` pages, the
+homepage's sport filter). Concretely: homepage/meta copy naming "every varsity sport - women's
+and non-revenue included" as an explicit value prop, and/or a dedicated women's-sports landing
+view reusing the exact same `EventList`/query-layer machinery Section 55/57 already built (a
+`gender` column already exists per Section 5's schema - `getFilteredEvents` doesn't currently
+expose it as a homepage filter, the one small addition needed). Given #4's real, current search/
+viewership growth in this category, a low-cost SEO bet with a plausible payoff, not a redesign.
+
+**Explicitly not recommended right now**: building toward the Sponsor Dashboard or NIL
+Marketplace based on this research - the VC dollars are real (#2, #6-7) but 0.8's own gating
+logic (G0, consent ledger included, before G3/NIL-adjacent work) is unaffected by "the category
+is well-funded elsewhere"; the fan-graph is still thin (school-follows only, no retention data
+yet). Also not recommended: chasing AI broadcast/computer-vision features directly (#3's literal
+framing) - that's GameChanger/Hudl-scale infrastructure (their own camera hardware), not a fit
+for a solo founder. The realistic, narrower version of the same trend here is text-based recap
+generation from structured results data (Recommendation 1), not live video AI.
+
+**Not yet started**: the results/scores feasibility check (Recommendation 1's prerequisite) and
+the women's-sports positioning pass (Recommendation 2) are both real, scoped, unstarted next
+steps for a future session to pick up.
+
 ---
 
 ## 1. What this is
