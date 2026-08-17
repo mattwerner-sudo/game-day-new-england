@@ -248,6 +248,20 @@ export const rateLimits = pgTable("rate_limits", {
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
 });
 
+// Anonymous, aggregate-only page-view counter for the admin dashboard (Section 60) - no user id,
+// session id, IP, or cookie recorded, deliberately, to stay consistent with this app's existing
+// "no tracking cookies" privacy claim (src/app/privacy/page.tsx's Cookies section). Just "this
+// path was viewed at this time" - enough to answer "what's popular" without identifying anyone.
+export const pageViews = pgTable(
+  "page_views",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    path: text("path").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [index("page_views_path_idx").on(table.path), index("page_views_created_at_idx").on(table.createdAt)]
+);
+
 export const fanFollows = pgTable(
   "fan_follows",
   {

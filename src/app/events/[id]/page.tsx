@@ -7,6 +7,7 @@ import { formatGender, formatSport, formatLocation, formatParticipants, eventTit
 import { resolveEmbed, resolveTicketEmbed, resolveNecFrontRowEmbed } from "@/lib/embed";
 import { withTicketAffiliateTag } from "@/lib/affiliate";
 import { SchoolLogo } from "@/components/SchoolLogo";
+import { logPageView } from "@/lib/analytics";
 import { auth } from "@/auth/auth";
 import {
   isFollowingTeam,
@@ -147,6 +148,7 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const { id } = await params;
   const event = await getEventById(id);
   if (!event) notFound();
+  logPageView(`/events/${id}`);
 
   const embed = resolveEmbed(event.streamingVideoUrl) ?? (await resolveNecFrontRowEmbed(event.streamingVideoUrl));
   const ticketEmbed = resolveTicketEmbed(event.ticketUrl);
@@ -270,6 +272,12 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
           {formatLocation(event)}
           {event.division ? ` · ${event.division}` : ""}
         </p>
+        <a
+          href={`/api/events/${event.id}/ics`}
+          className="mt-2 inline-block text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
+        >
+          📅 Add to Calendar
+        </a>
 
         {session ? (
           followButtons.length > 0 && (

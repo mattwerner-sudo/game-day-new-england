@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { getSchoolBySlug, getFilteredEvents } from "@/db/queries";
 import { EventList } from "@/components/EventList";
 import { SchoolLogo } from "@/components/SchoolLogo";
+import { logPageView } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -35,6 +36,7 @@ export default async function SchoolPage({ params }: { params: Promise<{ slug: s
   const { slug } = await params;
   const school = await getSchoolBySlug(slug);
   if (!school) notFound();
+  logPageView(`/schools/${slug}`);
 
   const events = await getFilteredEvents("season", { schoolId: school.id });
 
@@ -55,6 +57,12 @@ export default async function SchoolPage({ params }: { params: Promise<{ slug: s
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           {school.conference} · {school.division} · {school.city}, {school.state}
         </p>
+        <a
+          href={`/api/schools/${slug}/ics`}
+          className="mt-2 inline-block text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
+        >
+          📅 Subscribe to full schedule
+        </a>
 
         <div className="mt-6">
           <EventList

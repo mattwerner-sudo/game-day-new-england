@@ -3709,3 +3709,55 @@ finished, caught by looking at the output rather than assuming the flag wasn't n
 exact listing copy, permission justifications, and privacy-practices answers ready to paste into
 the dashboard. Everything needed to submit is prepared - creating the developer account, paying
 its $5 fee, and clicking submit are the founder's own account/payment actions to take.
+
+## 60. Session log: 2026-08-17 (continued) — ICS calendar export + a founder-only admin backend
+
+Founder pasted independent advice from Gemini about where to take the app next and asked to
+build the one genuinely new, low-risk idea in it (calendar sync), plus a separate ask: a real
+backend for tracking and viewing user behavior. Worth noting for the record: most of Gemini's
+other suggestions (team-level follows, in-app streaming/tickets, sponsor-brought-to-you-by ads,
+ticket affiliate cuts) were already built earlier this session - it was reasoning from a
+description of the product, not from this file, so it independently converged on several things
+already shipped rather than proposing them fresh.
+
+**Calendar export** - new `src/lib/ics.ts`, a minimal hand-rolled RFC 5545 generator (no library;
+this app only ever needs VEVENT/VCALENDAR with a handful of fields). Three new routes:
+`/api/events/[id]/ics` (single-game download), `/api/schools/[slug]/ics` and
+`/api/leagues/[slug]/ics` (real subscribable feeds using the same `season` window the
+Section 55 pages already show, so what a calendar app displays matches what the page displays -
+Google/Apple Calendar's "subscribe from URL" re-fetches these on their own schedule, so new games
+appear with no action from the user). "📅 Add to Calendar" / "📅 Subscribe to full schedule" links
+added to the event/school/league pages respectively. 9 new unit tests for the ICS generator
+(caught one real test bug of my own along the way: asserting "no `\n` anywhere" is wrong for a
+`\r\n`-terminated format, since `\r\n` itself contains `\n` as a substring - fixed to assert the
+real invariant, no *bare* `\n`). Verified all three routes live (correct `Content-Type`/
+`Content-Disposition`, real ICS output, a 404 for a bad slug) and both new UI links rendering
+correctly.
+
+**Admin backend** - new `/admin`, gated by a single hardcoded `ADMIN_EMAIL` env var (same
+founder-owned-fact bucket as `MAILING_ADDRESS`/`LEGAL_ENTITY_NAME`) rather than a real roles
+system - there's exactly one admin, and building role-based access for a single user would be
+infrastructure ahead of any real need. 404s (not a 403/login redirect) for anyone else, so the
+page's existence isn't advertised. Confirmed the fail-closed default directly: with no
+`ADMIN_EMAIL` set, `/admin` 404s unconditionally, session or not.
+
+Most of what it shows needed **zero new tracking** - it's real aggregation over data this app
+already collects for its own product reasons: total/new users, follows broken down by type, most-
+followed schools/leagues, digest sends by channel, consent/follow action counts. The one genuinely
+new piece is an anonymous page-view counter (new `pageViews` table: path + timestamp only, no
+user id, session id, IP, or cookie) - deliberately minimal to stay consistent with this app's
+existing "no tracking cookies" privacy claim rather than reach for a real analytics vendor.
+Added a line to `/privacy`'s Cookies section disclosing this plainly rather than leaving it
+unmentioned, matching this session's established discipline of keeping that page accurate as new
+surfaces are added (COPPA/cookies/legal-entity, Chrome extension - Sections 54/59).
+
+**Verified the real hard part - the aggregation queries - against live production data**, not
+just that the page renders: ran `getAdminStats()` directly and confirmed `totalSchools`/
+`totalEvents` matched known real numbers (100/34,243) and that a real page-view genuinely written
+during this same verification pass was correctly read back by the aggregation query - proving the
+full write-then-aggregate pipeline works, not just that each half compiles. Deleted those test
+page-view rows afterward so the dashboard starts from genuinely clean data, same cleanup
+discipline as every other live-data test this session. `tsc --noEmit` clean, full suite 125/125.
+
+**Not yet done, needs the founder**: set `ADMIN_EMAIL` in Vercel to actually unlock `/admin` -
+same category as every other founder-owned env var in this file.

@@ -11,6 +11,7 @@ import {
 } from "@/db/queries";
 import { EventList } from "@/components/EventList";
 import { formatSport, formatDay, eventTitle } from "@/lib/format";
+import { logPageView } from "@/lib/analytics";
 
 export const dynamic = "force-dynamic";
 
@@ -55,6 +56,7 @@ function HiddenFilterFields({
 }
 
 export default async function Home({ searchParams }: { searchParams: Promise<SearchParams> }) {
+  logPageView("/");
   const params = await searchParams;
   const anchorDate = parseDateParam(params.date);
   // Picking a date without an explicit range means "show me that whole month".

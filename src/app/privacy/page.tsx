@@ -107,7 +107,10 @@ export default function PrivacyPage() {
             <p className="mt-2">
               We use one cookie: a session cookie that keeps you signed in. We don&apos;t use
               analytics, advertising, or tracking cookies, and we don&apos;t share cookie data with
-              any third party.
+              any third party. We do record which pages are viewed - a page path and a timestamp,
+              nothing else - to understand what&apos;s popular. That record isn&apos;t tied to a
+              cookie, account, IP address, or any other identifier, and can&apos;t be traced back
+              to you.
             </p>
           </section>
 
