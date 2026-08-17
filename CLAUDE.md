@@ -404,6 +404,38 @@ no real advantage over the existing in-house Resend setup for this use case.
 lever worth pulling once a broadcast newsletter has real list size, not a first-dollar solution;
 the manual sponsor-slot pilot (#1 above) is still the faster path to a first real dollar.
 
+### 0.12 Public API - not a new idea, the backbone under an existing one (added 2026-08-15)
+
+Founder asked whether this app could become an API product, referencing Zernio
+([zernio.com](https://zernio.com)) as a model. Checked the actual site before answering: Zernio
+sells **infrastructure** - one unified API in front of 15+ *other* platforms' own APIs (Instagram,
+TikTok, WhatsApp, ad networks), a horizontal play whose value is absorbing the integration pain of
+many messy third-party providers. That's not the same shape of business this repo would be in. An
+API here would expose **first-party data this repo already owns** (real New England schedules,
+results, streaming/ticket links) - closer in kind to a narrow vertical data API (think TheSportsDB
+or a regional SportsDataIO) than to Zernio's broad infra play. Real precedent that "sports
+schedule data as a paid/free API" is a working model elsewhere, just smaller in ambition here than
+Zernio's category.
+
+**Not actually a new item on this list - it's the implementation layer under an existing one.**
+Section 0.11 item #4 ("powered by" schedule widget licensed to a school for a flat monthly fee) is
+an API consumer by definition - a school embedding a live widget needs *something* serving that
+data as JSON, not rendered HTML. The eventual mobile app and Chrome extension (0.10) would also
+consume this same API rather than re-implement the query layer twice. Building the API first,
+generically, and letting the widget/app/extension be three different clients of it, is the right
+order - the API is plumbing, not a fourth product to sell on its own merits (yet).
+
+**Feasibility**: genuinely small relative to most of this session's work - `src/db/queries.ts`
+(`getFilteredEvents`, `getFilterOptions`, etc.) already does this exact work for the web pages;
+exposing it as JSON under a new `/api/v1/...` route reuses nearly all of it. A read-only v1
+(events, schools, filters) is a same-session build, not a new initiative.
+
+**Open, not yet decided**: free/public from day one (matches the top-of-funnel/goodwill instinct
+already established for this product, and is the smaller build) vs. paid/API-key-gated from the
+start (a real feature - keys, tiers, rate limiting - none of which exists in the schema yet).
+Founder hasn't picked a direction as of this entry; revisit before building past a v1 read-only
+endpoint.
+
 ---
 
 ## 1. What this is
