@@ -3664,10 +3664,23 @@ problem, resolved with a cache-busting query param). Served the extension folder
 loaded `popup.html` directly to check its layout and fetch/render logic - this surfaced a real,
 expected gap: the popup correctly failed against `api/v1/*` with a 404 because those routes
 existed only on the local dev server, not yet pushed to production. Committing this section
-together with the API routes closes that gap. **What this session's tools cannot verify at all**:
-the actual `chrome://extensions` → "Load unpacked" → click-the-toolbar-icon flow, which needs a
-real Chrome install and OS-level file picker - the founder needs to do that load-and-click step
-themselves; the popup's core logic (data fetch, rendering, range/school switching) was verified,
-its behavior *as an installed extension* was not. `tsc --noEmit` clean, full suite still 117/117
-(no new pure-logic function on the Next.js side; the extension's own JS has no test harness set up
-- a small, isolated JS file, matching this project's precedent of not testing UI rendering code).
+together with the API routes closes that gap.
+
+**Went further than "looks right" for the interactive behavior specifically, since that's exactly
+where a popup like this tends to break silently.** Initial testing (serving the folder locally,
+loading `popup.html` directly) hit a real wall: `chrome.storage`/`chrome.tabs` don't exist outside
+a real installed extension, so the school-filter and event-click handlers threw immediately
+(confirmed via console: `Cannot read properties of undefined (reading 'local')`) - which could
+easily have been mistaken for "can't verify this at all, trust the code." Instead built a small
+local-only test harness (`_test_harness.html`, stubs `chrome.storage`/`chrome.tabs` with an
+in-memory/console-logging fake, deleted after use - never shipped) that loads the real, unmodified
+`popup.js`. That let every interactive path actually run for real: selecting a school genuinely
+re-fetches and filters the list (confirmed the rendered cards changed from a 4-school mix to only
+Bryant games), the selection genuinely persists to the storage stub, and clicking a game card
+genuinely calls `chrome.tabs.create` with the exact right event URL. What's left, and genuinely
+can't be closed from here: the real `chrome://extensions` → "Load unpacked" → click-the-toolbar-
+icon flow needs a real Chrome install and an OS-level file picker - that step is the founder's to
+do. But everything the popup's own code actually *does* once installed is now verified, not
+assumed. `tsc --noEmit` clean, full suite still 117/117 (no new pure-logic function on the Next.js
+side; the extension's own JS has no automated test harness - a small, isolated file, verified
+interactively instead, matching this project's existing testing-boundary convention for UI code).
