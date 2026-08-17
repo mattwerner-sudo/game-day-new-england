@@ -2,11 +2,12 @@ import { describe, expect, it } from "vitest";
 import { getRangeWindow, isDateRange, parseDateParam, toDateParam } from "./dateRange";
 
 describe("isDateRange", () => {
-  it("accepts the four known ranges", () => {
+  it("accepts the five known ranges", () => {
     expect(isDateRange("today")).toBe(true);
     expect(isDateRange("weekend")).toBe(true);
     expect(isDateRange("week")).toBe(true);
     expect(isDateRange("month")).toBe(true);
+    expect(isDateRange("season")).toBe(true);
   });
 
   it("rejects anything else", () => {
@@ -35,6 +36,13 @@ describe("getRangeWindow", () => {
     const { start, end } = getRangeWindow("month", now);
     expect(start).toEqual(new Date(2026, 9, 1));
     expect(end).toEqual(new Date(2026, 10, 1));
+  });
+
+  it("spans 150 days from today for 'season'", () => {
+    const now = new Date(2026, 7, 13, 15, 30);
+    const { start, end } = getRangeWindow("season", now);
+    expect(start).toEqual(new Date(2026, 7, 13, 0, 0, 0, 0));
+    expect(end).toEqual(new Date(2027, 0, 10, 0, 0, 0, 0));
   });
 
   describe("'weekend' - Friday 00:00 through Monday 00:00, for every day of the week", () => {

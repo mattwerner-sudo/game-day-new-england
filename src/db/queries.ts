@@ -6,6 +6,7 @@ import { events, teams, schools, venues } from "./schema";
 import { NE_STATES, DateRange, getRangeWindow } from "./dateRange";
 import { resolveSpecialVenue } from "./specialVenues";
 import { getSchoolLogoUrl } from "@/lib/schoolLogo";
+import { slugify } from "@/lib/slug";
 
 export * from "./dateRange";
 
@@ -434,6 +435,47 @@ export const getFilterOptions = unstable_cache(
   ["getFilterOptions"],
   { revalidate: 300 }
 );
+
+export interface SchoolProfile {
+  id: string;
+  name: string;
+  conference: string;
+  division: string;
+  city: string;
+  state: string;
+  logoUrl: string | null;
+}
+
+/**
+ * Backs the /schools/[slug] SEO page (Section 55). No stored slug column - schools.name has a
+ * DB-level unique constraint, so slugifying it at request time is always stable and collision-
+ * free, the same reasoning specialVenues.ts already applies to venue name matching. Only ~100
+ * rows, cheap to scan.
+ */
+export async function getSchoolBySlug(slug: string): Promise<SchoolProfile | null> {
+  const allSchools = await db.select().from(schools);
+  const match = allSchools.find((s) => slugify(s.name) === slug);
+  if (!match) return null;
+  return {
+    id: match.id,
+    name: match.name,
+    conference: match.conference,
+    division: match.division,
+    city: match.city,
+    state: match.state,
+    logoUrl: getSchoolLogoUrl(match.name, match.websiteUrl, match.cmsPlatform),
+  };
+}
+
+/**
+ * Backs the /leagues/[slug] SEO page (Section 55). No leagues table exists (Section 5/47) - a
+ * league is just one of getFilterOptions().leagues' already-deduped text values, so resolving a
+ * slug back to the real display name is a lookup against that same list, not a new query.
+ */
+export async function resolveLeagueSlug(slug: string): Promise<string | null> {
+  const { leagues } = await getFilterOptions();
+  return leagues.find((l) => slugify(l) === slug) ?? null;
+}
 
 /**
  * Team picker source for /manage's team-follow picker only - kept separate from

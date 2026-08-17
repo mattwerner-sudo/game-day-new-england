@@ -3524,3 +3524,54 @@ something this session can substitute for.
 Verified rendering via `get_page_text` after the interactive browser pane hit the same known
 flakiness as earlier this session (screenshots/clicks stalling, text extraction unaffected).
 `tsc --noEmit` clean, full suite still 110/110.
+
+## 55. Session log: 2026-08-17 (continued) — programmatic SEO: dedicated pages per school/league
+
+Founder asked whether [gympricing.com](https://gympricing.com) (a gym-price comparison
+aggregator - same shape of business as this repo, scraping each business's own site) offered
+anything worth learning from. It did: rather than one filterable homepage, it generates a real
+indexable page per neighborhood, per brand, and per individual location - each targeting one
+specific long-tail search. This repo had the equivalent gap - one homepage with filters, nothing
+indexable for "Amherst women's soccer schedule" or "NESCAC hockey schedule" as its own page.
+(The other real finding from that comparison - a "claim your listing" free-to-paid funnel for
+business owners - validates the plan's existing School Portal concept (0.2/4.2) almost exactly,
+recorded for later, not built this pass.)
+
+**New pages**: `/schools/[slug]` and `/leagues/[slug]` (one per school/league, upcoming schedule),
+plus `/schools` and `/leagues` index pages linking to every individual one, added into the
+existing `sitemap.ts` (Next's App Router convention) alongside what was already there. Caught a
+real mistake before committing, not after: an early version of this edit *replaced* the sitemap's
+existing upcoming-event-page entries with just the new school/league URLs instead of adding to
+them - a real regression (event pages catch different, very-long-tail queries a school/league
+page wouldn't). Fixed to include both.
+
+**No stored slug column** - `schools.name` already has a DB-level unique constraint and league
+names are already deduped text (`getFilterOptions().leagues`), so slugifying either at request
+time (new `src/lib/slug.ts`) is always stable and collision-free, same reasoning
+`specialVenues.ts` already applies to venue name matching. Confirmed the one real edge case
+(a league name that's already hyphenated, "Northeast-10") slugifies to itself unchanged.
+
+**A new `"season"` `DateRange` value** (`src/db/dateRange.ts`) - today through +150 days. Not a
+homepage-toggleable range (existing `today`/`weekend`/`week`/`month` cover that UI), but the
+school/league pages need "the upcoming schedule" rather than a narrow window a search visitor
+would have to already know to widen - `month` alone would show zero games in an off-month.
+Reuses `getFilteredEvents`/`EventFilters.schoolId`/`.league` entirely as-is - zero query-layer
+changes needed beyond this one new range and the two slug-lookup functions
+(`getSchoolBySlug`/`resolveLeagueSlug`) added to `queries.ts`.
+
+**Extracted `src/components/EventList.tsx`** from the homepage's inline day-grouped list
+rendering - the third caller needing the identical markup (homepage, school page, league page)
+crossed this project's own established threshold for when duplication is worth extracting
+(`SchoolLogo.tsx`'s comment on the same judgment call, Section 51). Homepage now just calls
+`<EventList events={events} emptyMessage={...} />` - `page.tsx` lost ~140 lines with no behavior
+change, confirmed via a live diff of the rendered homepage before/after.
+
+**Verified live against real Neon data**: homepage still renders identically (including the new
+"Browse all schools"/"Browse all leagues" nav links); `/schools` lists all 100 real schools;
+`/schools/amherst-college` renders a real logo, conference/division/city, and a real 150-day
+schedule starting from a real upcoming game; `/leagues/northeast-10` renders real cross-
+conference games correctly (a Southern New Hampshire @ Dartmouth game shows up because SNHU's
+side is Northeast-10, even though Dartmouth itself is Ivy League - confirmed this is the existing
+league-filter's real either-side-matches behavior, not a bug); `/sitemap.xml` produces valid XML
+listing every school/league URL; an invalid slug correctly 404s. `tsc --noEmit` clean, full suite
+117/117 (110 + 7 new: 6 slug tests, 1 season-range test).

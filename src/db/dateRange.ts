@@ -11,7 +11,7 @@
 // value, and doubles as the canonical clean list for the State dropdown.
 export const NE_STATES = ["CT", "ME", "MA", "NH", "RI", "VT"] as const;
 
-export const DATE_RANGES = ["today", "weekend", "week", "month"] as const;
+export const DATE_RANGES = ["today", "weekend", "week", "month", "season"] as const;
 export type DateRange = (typeof DATE_RANGES)[number];
 
 export function isDateRange(value: string): value is DateRange {
@@ -47,6 +47,18 @@ export function getRangeWindow(range: DateRange, now = new Date()): { start: Dat
   if (range === "month") {
     const start = new Date(now.getFullYear(), now.getMonth(), 1);
     const end = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    return { start, end };
+  }
+
+  // Not a homepage-toggleable range (no button for it) - used by the school/league SEO pages
+  // (Section 55), which want "the upcoming schedule" rather than a narrow window a search
+  // visitor would need to already know to widen. 150 days comfortably covers one varsity season
+  // (fall: Aug-Nov, ~120 days) without reaching all the way into the next one.
+  if (range === "season") {
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(start);
+    end.setDate(end.getDate() + 150);
     return { start, end };
   }
 
