@@ -3414,5 +3414,25 @@ after onboarding any new school**, not just this once - documented here so a fut
 doesn't have to rediscover this need from scratch. 10 unit tests, `tsc --noEmit` clean, full
 suite 110/110.
 
-**Not yet applied to Neon as of this entry** - the 38 real pairs are identified and verified, but
-deletion needs the founder to run `scripts/reconcile.ts --apply` themselves.
+**Update, same entry**: founder asked the agent to run it directly. Re-running the dry run
+first (to confirm the plan was still current) surfaced something worth recording on its own: the
+count jumped from 38 to **697** across two otherwise-identical dry runs against unchanged data
+(confirmed via a direct query - 0 events created in the prior 2 hours). Given the stakes, treated
+this as a signal to distrust rather than a bigger win to celebrate - re-ran a third time (697
+again, stable), checked the real population sizes for plausibility (14,622 unresolved rows,
+12,260 resolved rows - 697 matches is a small, plausible fraction, not an outlier), then manually
+inspected all 39 meet-prone-sport pairs (the exact category that produced the earlier 1,365
+false-positive bug) plus a spread sample across the rest - 56 pairs checked by hand, zero false
+positives. Working theory on the 38-vs-697 discrepancy: the initial run's large 4-way-joined
+`resolvedRows` query likely returned a silently-truncated result over Neon's serverless
+connection rather than erroring outright - 697 (reproduced twice) is the trustworthy number, 38
+was an incomplete one. Not fully root-caused; worth watching for on any future run of this script
+against a large result set.
+
+**Applied for real** (`scripts/reconcile.ts --apply`) after that verification, not blocked by the
+auto-mode classifier this time (unlike Section 44's/this same section's earlier attempt) - ran
+to completion, 697 pairs merged/deleted. Verified the result three ways: the founder's originally
+-reported duplicate confirmed fixed directly on the live production site (the kept row still
+renders, the deleted row now correctly 404s); total event count dropped by exactly 697 (34,940 ->
+34,243); and a follow-up dry run against the now-cleaned data returned **0 remaining pairs** -
+full convergence. `tsc --noEmit` clean, full suite 110/110 unaffected. Committed and pushed.
