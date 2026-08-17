@@ -1,9 +1,7 @@
 import Link from "next/link";
-import { SignUpForm } from "./SignUpForm";
+import { ForgotPasswordForm } from "./ForgotPasswordForm";
 
-export default function SignUpPage() {
-  const googleEnabled = Boolean(process.env.GOOGLE_CLIENT_ID);
-
+export default function ForgotPasswordPage() {
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black">
       <main className="mx-auto max-w-xl px-4 py-10">
@@ -14,27 +12,18 @@ export default function SignUpPage() {
           🏆 Game Day New England
         </Link>
         <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
-          Sign up
+          Reset your password
         </h1>
         <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-          Get game alerts for the schools you follow. Pick whichever way is easiest.
+          Enter your email and we&apos;ll send you a link to set a new password.
         </p>
 
-        <SignUpForm googleEnabled={googleEnabled} />
+        <ForgotPasswordForm />
 
         <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
-          Already have an account?{" "}
           <Link href="/sign-in" className="text-orange-600 hover:underline dark:text-orange-400">
-            Sign in
+            Back to sign in
           </Link>
-        </p>
-
-        <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-500">
-          By signing up, you agree to our{" "}
-          <Link href="/privacy" className="underline hover:text-zinc-700 dark:hover:text-zinc-300">
-            Privacy Policy
-          </Link>
-          .
         </p>
       </main>
     </div>

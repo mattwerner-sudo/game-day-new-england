@@ -19,7 +19,13 @@ export default function SignInPage() {
 
         <SignInForm googleEnabled={googleEnabled} />
 
-        <p className="mt-6 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-4 text-sm text-zinc-600 dark:text-zinc-400">
+          <Link href="/forgot-password" className="text-orange-600 hover:underline dark:text-orange-400">
+            Forgot your password?
+          </Link>
+        </p>
+
+        <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
           Don&apos;t have an account?{" "}
           <Link href="/sign-up" className="text-orange-600 hover:underline dark:text-orange-400">
             Sign up

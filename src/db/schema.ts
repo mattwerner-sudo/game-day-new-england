@@ -6,6 +6,7 @@ import {
   boolean,
   doublePrecision,
   integer,
+  bigint,
   uniqueIndex,
   index,
 } from "drizzle-orm/pg-core";
@@ -232,6 +233,20 @@ export const verifications = pgTable(
   },
   (table) => [index("verifications_identifier_idx").on(table.identifier)]
 );
+
+// Better Auth's rate-limit storage - deliberately database-backed rather than left at Better
+// Auth's own default (in-memory), which doesn't reliably work on Vercel's serverless functions
+// (no shared memory across invocations, so the sign-in/sign-up/OTP rate limits Better Auth
+// already configures by default would be silently ineffective in production). Schema generated
+// via the same one-time `@better-auth/cli generate` scaffold used for the other Better Auth
+// tables (see users/sessions/accounts/verifications above) - matches its real expected shape
+// exactly, not hand-guessed.
+export const rateLimits = pgTable("rate_limits", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+});
 
 export const fanFollows = pgTable(
   "fan_follows",

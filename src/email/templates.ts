@@ -25,7 +25,8 @@ function footer(manageToken: string): string {
   const manageUrl = `${BASE_URL}/manage?token=${manageToken}`;
   return `<p style="color:#666;font-size:12px;margin-top:24px;">
     ${MAILING_ADDRESS}<br/>
-    <a href="${manageUrl}">Manage your alerts or unsubscribe</a>
+    <a href="${manageUrl}">Manage your alerts or unsubscribe</a> ·
+    <a href="${BASE_URL}/privacy">Privacy Policy</a>
   </p>`;
 }
 

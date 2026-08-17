@@ -14,6 +14,15 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_BASE_URL,
   secret: process.env.BETTER_AUTH_SECRET,
 
+  // Rate limiting is on by default in production (Better Auth's own default), but its default
+  // storage is in-memory - confirmed by reading the installed package's source
+  // (context/create-context.mjs), not assumed. In-memory storage doesn't reliably work on
+  // Vercel's serverless functions (no shared memory across invocations), which would silently
+  // undermine the sign-in/sign-up/OTP rate limits already configured by Better Auth's own
+  // defaults (3 attempts/10s on sign-in/up, 3/60s on OTP send+verify). Database-backed storage
+  // (the `rateLimits` table below) persists across invocations the same way sessions do.
+  rateLimit: { storage: "database" },
+
   // usePlural: true maps Better Auth's internal singular model names ("user", "session", ...)
   // onto this project's plural table exports (users, sessions, ...), matching every other table
   // in schema.ts. No `advanced.database.generateId` override - left at Better Auth's own

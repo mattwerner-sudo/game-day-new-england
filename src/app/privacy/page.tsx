@@ -1,0 +1,117 @@
+import Link from "next/link";
+
+const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? "[mailing address not yet configured]";
+const LAST_UPDATED = "August 17, 2026";
+
+export const metadata = { title: "Privacy Policy | Game Day New England" };
+
+export default function PrivacyPage() {
+  return (
+    <div className="min-h-screen bg-zinc-50 dark:bg-black">
+      <main className="mx-auto max-w-2xl px-4 py-10">
+        <Link
+          href="/"
+          className="text-sm font-medium text-orange-600 hover:underline dark:text-orange-400"
+        >
+          🏆 Game Day New England
+        </Link>
+        <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
+          Privacy Policy
+        </h1>
+        <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Last updated: {LAST_UPDATED}</p>
+
+        <div className="mt-6 space-y-6 text-sm leading-6 text-zinc-700 dark:text-zinc-300">
+          <section>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">What we collect</h2>
+            <p className="mt-2">
+              Browsing the schedule doesn&apos;t require an account and doesn&apos;t collect any
+              personal information. If you create an account, we collect:
+            </p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>Your name and email address</li>
+              <li>Your phone number, if you sign up or sign in with a phone number, or opt into text alerts</li>
+              <li>The schools, teams, leagues, venues, or games you choose to follow</li>
+              <li>Basic account activity (when your account was created, when you last verified your email or phone)</li>
+            </ul>
+            <p className="mt-2">
+              If you sign in with Google, we receive your name, email address, and profile image
+              from Google - nothing else from your Google account.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+              How we use it
+            </h2>
+            <p className="mt-2">We use your information only to:</p>
+            <ul className="mt-2 list-disc space-y-1 pl-5">
+              <li>Run your account (sign-in, password reset, verification codes)</li>
+              <li>Send you game alerts for what you&apos;ve chosen to follow, by email and/or text, only if you&apos;ve opted in</li>
+              <li>Occasionally include a sponsor message in that same alert email or text</li>
+            </ul>
+            <p className="mt-2">
+              We do not sell your personal information, and we do not share it with third parties
+              for their own marketing purposes.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+              Text messages and email
+            </h2>
+            <p className="mt-2">
+              Text alerts are opt-in only - we record the date you consented, and you can stop
+              them at any time by replying STOP or from your account page. Message and data rates
+              may apply. Email alerts include an unsubscribe link in every message. Opting out of
+              alerts doesn&apos;t delete your account.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+              Where your data is stored
+            </h2>
+            <p className="mt-2">
+              Your account data is stored in a managed Postgres database. Passwords are never
+              stored in plain text - they&apos;re hashed before being saved, and we can&apos;t
+              recover your original password even if we wanted to. We use established providers
+              to send email (Resend) and text messages (Twilio); they process message content
+              only to deliver it, not for their own purposes.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">Your choices</h2>
+            <p className="mt-2">
+              You can update what you follow, or stop email/text alerts, from your{" "}
+              <Link href="/manage" className="text-orange-600 hover:underline dark:text-orange-400">
+                account page
+              </Link>
+              . To delete your account entirely, contact us using the information below and
+              we&apos;ll remove your account and associated data.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+              Changes to this policy
+            </h2>
+            <p className="mt-2">
+              If we make a material change to how we handle your data, we&apos;ll update this page
+              and change the date above.
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">Contact</h2>
+            <p className="mt-2">
+              Questions about this policy or your data:
+              <br />
+              {MAILING_ADDRESS}
+            </p>
+          </section>
+        </div>
+      </main>
+    </div>
+  );
+}

@@ -3436,3 +3436,57 @@ to completion, 697 pairs merged/deleted. Verified the result three ways: the fou
 renders, the deleted row now correctly 404s); total event count dropped by exactly 697 (34,940 ->
 34,243); and a follow-up dry run against the now-cleaned data returned **0 remaining pairs** -
 full convergence. `tsc --noEmit` clean, full suite 110/110 unaffected. Committed and pushed.
+
+## 54. Session log: 2026-08-17 — commercial-grade security/auth audit, then closed the 3 real
+gaps it found
+
+Founder asked directly: is this commercial-grade for data acquisition, security, and sign-up/
+login? Answered by reading the actual installed Better Auth package source (not general
+knowledge/docs) - confirmed scrypt password hashing, httpOnly/sameSite=lax/secure cookies, CSRF
++ origin checks on by default, server-enforced (not just client-side) 8-char password minimum,
+built-in rate-limit rules (sign-in/up: 3/10s; OTP send+verify: 3-10/60s depending on plugin),
+192-bit random manage tokens, no secrets leaking into the client bundle, and a hard crash (not a
+silent insecure fallback) if `BETTER_AUTH_SECRET` is missing or weak. Found 3 real gaps, all
+closed this entry:
+
+**1. Rate limiting was configured but not durably enforced in production.** Better Auth's rate
+limiter defaults to in-memory storage unless told otherwise (confirmed in
+`node_modules/better-auth/dist/context/create-context.mjs`), which doesn't reliably work on
+Vercel's serverless functions - no shared memory across invocations, so the sign-in/OTP limits
+above existed in config but weren't actually holding in this deployment. Fixed by setting
+`rateLimit: { storage: "database" }` in `src/auth/auth.ts` and adding the `rate_limits` table
+Better Auth expects to `src/db/schema.ts` - schema generated via the same one-time
+`@better-auth/cli generate` scaffold-then-remove pattern used for the original users/sessions/
+accounts/verifications tables (Section 46), not hand-guessed, then the CLI removed again
+immediately after. Migration `0015_white_titania.sql`, purely additive, applied to both local and
+Neon. Verified locally that rate limiting itself only auto-enables when `NODE_ENV=production`
+(Better Auth's own sensible default - it's intentionally off in `next dev`), so 0 local rows in
+`rate_limits` after testing is expected, not a bug - full confirmation needs checking Neon after
+this deploys to production.
+
+**2. No forgot-password flow existed in the UI**, even though the backend
+(`emailAndPassword.sendResetPassword`) was already wired up in `src/auth/auth.ts` from the
+original auth build - anyone who set a password and forgot it had no way back in short of OTP/
+Google. Added `/forgot-password` (request a reset link) and `/reset-password` (consume the token,
+set a new password) pages, plus a "Forgot your password?" link on `/sign-in`. Client methods
+(`authClient.requestPasswordReset`/`resetPassword`) confirmed against the installed package's own
+route definitions (`api/routes/password.mjs`), not guessed. **Verified with a real, full
+end-to-end run**, not just UI inspection: created a real throwaway account, verified its email via
+the real dry-run verification link, requested a real reset link, followed the real
+`/api/auth/reset-password/:token` redirect, set a new password, and confirmed signing in with the
+*new* password actually works - then deleted the test account.
+
+**3. No privacy policy existed anywhere**, despite collecting name/email/phone and sending
+marketing email/SMS. Added `/privacy` - a real, specific policy (what's actually collected, why,
+where it's stored, that passwords are hashed not stored in plain text, that data isn't sold) using
+the same `MAILING_ADDRESS` env var as the email footer, not generic boilerplate. Linked from the
+sign-up page ("By signing up, you agree to our Privacy Policy") and added to the email footer
+alongside the existing manage/unsubscribe link.
+
+**Deliberately not built this pass** (flagged as gaps in the audit but not part of the 3 the
+founder asked to close): self-service account deletion/data export (the privacy policy currently
+says to contact support instead - a real manual-process stopgap, not a lie, but a smaller
+self-serve version is a reasonable next step), and MFA/2FA. `tsc --noEmit` clean, full suite
+110/110 unaffected (no new pure-logic functions warranted new unit tests this pass - the new
+surface is entirely page/form components and a schema addition, matching this project's existing
+testing-boundary convention).
