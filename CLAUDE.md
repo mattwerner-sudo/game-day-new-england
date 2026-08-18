@@ -3962,6 +3962,37 @@ suite 130/130 (125 + 5 new). Committed and pushed (`da2a59d`).
 recap text from this new score data) - Section 0.13 always scoped that as separate, dependent
 follow-on work, not bundled into the feasibility-check-plus-capture pass done here. Also not
 done: postponed/cancelled status detection (a separate, real gap - this pass only ever writes
-`"scheduled"` or `"final"`), Presto score capture (no viable data source found), and Section
-0.13's Recommendation 2 (women's/non-revenue sports positioning pass) - still queued, untouched
-this session.
+`"scheduled"` or `"final"`), Presto score capture (no viable data source found).
+
+## 62. Session log: 2026-08-17 (continued) — Section 0.13's Recommendation 2: gender filter +
+women's-sports landing page
+
+Built the cheap, no-dependency half of Section 0.13's research - real 2026 women's/non-revenue
+college sports viewership and revenue growth (finding #4) had no corresponding hook anywhere in
+this product, despite the underlying coverage already existing (Section 1's "every varsity
+sport" principle has covered women's programs since Day 1).
+
+**Homepage gains a Gender filter** (`mens`/`womens`/`coed`), same pattern as the existing
+Division/State/School/Sport/League filters - `EventFilters.gender` added to `src/db/queries.ts`,
+composes with every other filter via a plain `eq()` (no third arm needed the way `schoolId`'s
+`participatingSchoolIds` check requires, since `gender` is `NOT NULL` on both games and
+special_events per Section 5's schema).
+
+**New `/womens-sports` page** - same fixed-filter-landing-page pattern as `/schools/[slug]` and
+`/leagues/[slug]` (Section 55), but with no slug param since there's only one of it. Targets
+"women's college basketball schedule near me"-style searches directly, added to `sitemap.ts`.
+Root `layout.tsx` metadata description now names "women's and non-revenue sports included"
+explicitly rather than leaving it implicit in the filter list.
+
+**Verified live against real Neon data**: `/womens-sports` renders real upcoming events across
+multiple sports (field hockey, soccer, volleyball) with correct logos/venues/times;
+`?gender=womens&sport=soccer` on the homepage correctly narrowed to 31 real events, spot-checked
+via a script-injected DOM check confirming all 31 matching rows said "Women's Soccer" and zero
+said "Men's Soccer" - not just that the count changed. No new pure-logic function was added (a
+plain equality filter), so no new unit tests - existing 130/130 suite unaffected, `tsc --noEmit`
+clean. Committed and pushed (`835ed02`).
+
+**Both halves of Section 0.13's concrete recommendations are now shipped.** What's left from
+this session's research memo: the Content Agent itself (dependent on Section 61's score data,
+not yet started) and the standing founder-only punch list (`ADMIN_EMAIL`, Resend domain, Twilio
+10DLC, Chrome Web Store submission, Terms of Service).
