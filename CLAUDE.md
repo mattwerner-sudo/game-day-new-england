@@ -4056,3 +4056,49 @@ founder-owned-credential convention as `RESEND_API_KEY`/`TWILIO_*`/`GOOGLE_CLIEN
 and the event-page wiring are all still to write. Founder still needs an `ANTHROPIC_API_KEY` from
 the Anthropic Console, set in Vercel - same bucket as every other still-open founder credential
 (`ADMIN_EMAIL`, Resend domain, Twilio 10DLC).
+
+## 64. Session log: 2026-08-18 — Content Agent built (Section 63's scope, now shipped)
+
+Built exactly as scoped in Section 63, no design changes. `npm install @anthropic-ai/sdk`;
+new `src/lib/recap.ts` (`generateRecap()`) calls Claude Haiku 4.5 with structured score data
+(sport, gender, both school names, both scores, venue, date) and returns one factual sentence,
+or `null` on any failure - missing key, network error, timeout, empty response. Lazily
+constructs the Anthropic client so a missing `ANTHROPIC_API_KEY` never throws at module load
+(this file is imported by the event page on every request, not just final-game ones).
+
+**New nullable `events.recapText` column** (migration `0018_orange_stellaris.sql`, purely
+additive) - generated once, cached forever, exactly the "don't spend money on something nobody
+looks at" design from Section 63. `src/db/queries.ts` gained `saveRecap()` and extended
+`EventDetail` (not the shared `WeekendEvent` - Section 42's list-page-payload discipline) with
+`homeScore`/`awayScore`/`boxscoreUrl`/`recapText`, none of which had ever been exposed past the
+schema/ingestion layer since Section 61 built score capture - a real, previously-unnoticed gap:
+**the final score itself was never shown anywhere in the product** until this session. Fixed in
+the same pass, not treated as a separate task, since a recap sentence with no visible score
+next to it would have looked disconnected.
+
+`src/app/events/[id]/page.tsx`: on a `type === "game"` row with `status === "final"`, real
+scores, and both school names resolved, and no `recapText` yet, generates and persists a recap
+inline during the request; renders a bold score line (`awayScore - homeScore`, matching this
+app's existing away-first convention) with a box score link when one exists, plus the recap
+sentence below it when present.
+
+**Verified live against real Neon data** (a real Amherst 65-37 win over Hamilton, men's
+basketball): score line renders correctly (`37 - 65`, away first), box score link present and
+correct, no recap section rendered - confirmed genuinely inert with `ANTHROPIC_API_KEY` unset
+(the founder hasn't set this up yet, same as Resend/Twilio), not just skipped by an untested
+code path. No server errors. A scheduled (not-yet-played) game confirmed unaffected - no score
+line, no crash, normal rendering.
+
+**4 new unit tests** (`src/lib/recap.test.ts`) mocking the `@anthropic-ai/sdk` module itself
+(not a global, unlike `embed.test.ts`'s plain `fetch` mocking, since this goes through the SDK's
+client class) - unset key skips the API entirely, a successful response returns trimmed text, a
+response with no text block returns null, a thrown error (network/timeout/rate-limit) returns
+null. One real mocking gotcha hit and fixed: `vi.fn().mockImplementation(() => ({...}))` fails
+with `TypeError: ... is not a constructor` since arrow functions can never be `new`'d - fixed
+with a plain `function MockAnthropic() { return {...}; }`. `tsc --noEmit` clean, full suite
+134/134 (130 + 4 new). Committed and pushed (`f4976b8`).
+
+**Not yet possible to verify**: actual generated recap text/quality, since that needs a real
+`ANTHROPIC_API_KEY` - the founder's own credential to add, same bucket as every other pending
+founder-owned setup item in this file. Once set, the very next view of any final game will
+generate and permanently cache its first real recap with no further code changes needed.
