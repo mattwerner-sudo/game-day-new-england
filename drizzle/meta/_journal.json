@@ -120,6 +120,13 @@
       "when": 1787007160443,
       "tag": "0016_adorable_carnage",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1787011106688,
+      "tag": "0017_plain_katie_power",
+      "breakpoints": true
     }
   ]
 }

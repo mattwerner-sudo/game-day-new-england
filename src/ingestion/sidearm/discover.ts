@@ -15,6 +15,21 @@ export interface SidearmSportMeta {
   // have entries here, and that's expected, not a bug. Always empty for schools on the
   // newer API-driven platform below - its ticket widget isn't scraped (yet).
   ticketUrlsByGameId: Map<string, string>;
+  // Real final scores, keyed the same way as ticketUrlsByGameId. "team"/"opponent" in the
+  // source JSON are relative to whichever school's own schedule page this was fetched from -
+  // not "home"/"away" - the caller maps these onto home/away using the same matchup.isHome
+  // signal already used for ticket/streaming fields. Only present when SIDEARM's own embedded
+  // `result` block has a real non-null status and both scores parse as numbers - see
+  // CLAUDE.md Section 0.13/61 for the feasibility research this was built on. Empty for the
+  // newer API-driven platform (not scraped there, same limitation as ticketUrlsByGameId).
+  gameResultsByGameId: Map<string, GameResult>;
+}
+
+export interface GameResult {
+  status: string; // e.g. "W" | "L" | "T" - whatever SIDEARM's own result status string is
+  teamScore: number;
+  opponentScore: number;
+  boxscoreUrl: string | null; // relative path, e.g. "/boxscore.aspx?id=14757" - caller resolves to absolute
 }
 
 /** Extract Paciolan/evenue per-game ticket links from a SIDEARM schedule page's HTML. */
@@ -25,6 +40,37 @@ function extractPaciolanTicketLinks(html: string): Map<string, string> {
     const href = m[1].replace(/&amp;/g, "&").replace(/^http:/, "https:");
     const gameId = href.match(/game_id=(\d+)/)?.[1];
     if (gameId) map.set(gameId, href);
+  }
+  return map;
+}
+
+/**
+ * Extract per-game final scores from a SIDEARM schedule page's embedded `result` JSON
+ * blocks - confirmed real and populated for completed games (Amherst baseball,
+ * 2026-08-17), in contrast to the ICS feed's DESCRIPTION field, which never carries score
+ * data at all (Section 15/16/17). Deliberately field-anchored rather than a full balanced-
+ * brace JSON parse - `line_scores` (unused here) can itself be a large nested object, and
+ * the fields consumed here (`status`/`team_score`/`opponent_score`/`boxscore`) appear in a
+ * fixed order right after `game_id` on every real example seen, so a bounded regex avoids
+ * needing a real JSON-brace-matcher for a blob embedded inside a larger page script, not a
+ * standalone JSON document.
+ */
+export function extractGameResults(html: string): Map<string, GameResult> {
+  const map = new Map<string, GameResult>();
+  const pattern =
+    /"result":\{"game_id":(\d+),"status":("[^"]*"|null),"team_score":("[^"]*"|null),"opponent_score":("[^"]*"|null),"prescore":(?:"[^"]*"|null),"postscore":(?:"[^"]*"|null),"bid":"[^"]*","boxscore":("[^"]*"|null)/g;
+  for (const m of html.matchAll(pattern)) {
+    const [, gameId, rawStatus, rawTeamScore, rawOpponentScore, rawBoxscore] = m;
+    if (rawStatus === "null" || rawTeamScore === "null" || rawOpponentScore === "null") continue;
+    const teamScore = Number(rawTeamScore.slice(1, -1));
+    const opponentScore = Number(rawOpponentScore.slice(1, -1));
+    if (!Number.isFinite(teamScore) || !Number.isFinite(opponentScore)) continue;
+    map.set(gameId, {
+      status: rawStatus.slice(1, -1),
+      teamScore,
+      opponentScore,
+      boxscoreUrl: rawBoxscore === "null" ? null : rawBoxscore.slice(1, -1),
+    });
   }
   return map;
 }
@@ -75,6 +121,7 @@ async function fetchSportsViaApi(hostname: string): Promise<SidearmSportMeta[] |
       genderCode: s.globalSportGender,
       slug: s.globalSportNameSlug,
       ticketUrlsByGameId: new Map<string, string>(),
+      gameResultsByGameId: new Map<string, GameResult>(),
     }));
 }
 
@@ -117,6 +164,7 @@ export async function fetchSportMeta(
           genderCode: parsed.gender ?? "",
           slug,
           ticketUrlsByGameId: extractPaciolanTicketLinks(html),
+          gameResultsByGameId: extractGameResults(html),
         };
       }
     }

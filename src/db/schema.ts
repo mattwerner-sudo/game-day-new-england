@@ -107,6 +107,14 @@ export const events = pgTable(
     // "vs Syracuse (exh.)" (parenthetical) - previously silently dropped/left baked into the
     // opponent name rather than surfaced as a real, filterable fact about the game.
     isExhibition: boolean("is_exhibition").notNull().default(false),
+    // Populated only when the home school's own SIDEARM schedule page carries a real result
+    // (status W/L/T, non-null scores) - same home-pass-only trust rule as ticketUrl/streaming
+    // below, since only the home school's feed reliably has this. Null means "not yet played
+    // or result not available from this source", not "0-0" - never defaulted to 0. See
+    // CLAUDE.md Section 0.13/61 for the feasibility research this was built on.
+    homeScore: integer("home_score"),
+    awayScore: integer("away_score"),
+    boxscoreUrl: text("boxscore_url"),
     ticketUrl: text("ticket_url"),
     isFree: boolean("is_free"),
     sourceUrl: text("source_url"), // home school's own game-detail page - always-available

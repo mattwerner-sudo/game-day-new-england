@@ -126,6 +126,9 @@ export interface EventUpsertInput {
   streamingAudioUrl?: string | null;
   opponentNameRaw?: string | null;
   isExhibition?: boolean;
+  homeScore?: number | null;
+  awayScore?: number | null;
+  boxscoreUrl?: string | null;
 }
 
 /**

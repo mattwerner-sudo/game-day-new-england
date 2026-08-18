@@ -193,6 +193,21 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
       ? { ticketUrl, sourceUrl: game.url, ...streaming }
       : {};
 
+    // "team"/"opponent" in the source result are relative to this school's own schedule
+    // page, not home/away - map onto home/away using the same isHome signal already used
+    // for ticket/streaming fields above. Unlike those, this is trusted from EITHER pass
+    // (both schools' own feeds independently report their own result for the same game),
+    // not home-only - see discover.ts's GameResult doc comment.
+    const gameResult = gameId ? meta.gameResultsByGameId.get(gameId) : undefined;
+    const scoreFields = gameResult
+      ? {
+          homeScore: matchup.isHome ? gameResult.teamScore : gameResult.opponentScore,
+          awayScore: matchup.isHome ? gameResult.opponentScore : gameResult.teamScore,
+          boxscoreUrl: gameResult.boxscoreUrl ? `https://${hostname}${gameResult.boxscoreUrl}` : null,
+          status: "final",
+        }
+      : {};
+
     const result = await upsertEvent({
       type: "game",
       sport,
@@ -211,6 +226,7 @@ export async function ingestSchoolSport(school: School, sportSlug: string): Prom
       opponentNameRaw: opponent ? null : opponentName,
       isExhibition: matchup.isExhibition,
       ...linkFields,
+      ...scoreFields,
     });
 
     if (result === "inserted") inserted++;
