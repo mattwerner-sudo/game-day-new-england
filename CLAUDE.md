@@ -3996,3 +3996,63 @@ clean. Committed and pushed (`835ed02`).
 this session's research memo: the Content Agent itself (dependent on Section 61's score data,
 not yet started) and the standing founder-only punch list (`ADMIN_EMAIL`, Resend domain, Twilio
 10DLC, Chrome Web Store submission, Terms of Service).
+
+## 63. Session log: 2026-08-17 (continued) — Content Agent scoped, not built. Pick up here next
+session.
+
+Scoped the last unbuilt piece from Section 0.13 (the Content Agent - LLM-generated recap text
+from Section 61's new score data). Not started - the founder wants to build it a future session,
+recorded here so the scope isn't lost to chat history.
+
+**Model: Claude Haiku 4.5 (`claude-haiku-4-5`), not a larger model.** Structured data in
+(final score, team names, sport, venue, date), one factual sentence out - no reasoning needed,
+squarely the shape Haiku is for. Real cost estimate at this app's actual volume: ~200 input +
+~60 output tokens per recap at Haiku's $1/$5-per-MTok pricing - **~$0.0005/recap**, under $2/mo
+even at a few thousand generations. Prompt caching is deliberately **not** part of the design -
+Haiku 4.5's cache minimum is 4,096 tokens, this system prompt is nowhere near that, and at this
+per-call cost caching wouldn't move anything even if it engaged.
+
+**Design: on-demand + cache in the DB, never regenerate** - same "don't spend money on something
+nobody looks at" instinct as every other feature this project has built cheaply first (the
+newsletter sponsor pilot, Section 0.11). New nullable `events.recapText` column (purely
+additive, same migration pattern as every other addition this session). On `/events/[id]`, a
+game with `status: 'final'` and `recapText` still null triggers one generation, saved
+permanently; every later view of that game is a free read. No batch/nightly generation, no
+folding into the digest email - both explicitly deferred, the lazy approach is cheaper by
+construction since most non-marquee D3 games likely get near-zero page views.
+
+**Implementation sketch** (`src/lib/recap.ts`, not yet written):
+```ts
+const client = new Anthropic(); // reads ANTHROPIC_API_KEY - unset means the caller skips this entirely
+
+export async function generateRecap(game: {
+  sport: string; gender: string;
+  homeSchoolName: string; awaySchoolName: string;
+  homeScore: number; awayScore: number;
+  venueName: string | null; startDatetime: Date;
+}): Promise<string | null> {
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  try {
+    const response = await client.messages.create({
+      model: "claude-haiku-4-5",
+      max_tokens: 100,
+      system: "Write one factual sentence recapping this completed college game: winner, final score, sport. No speculation, no play-by-play, no exclamation points.",
+      messages: [{ role: "user", content: JSON.stringify(game) }],
+    }, { timeout: 15_000 });
+    const block = response.content.find((b) => b.type === "text");
+    return block?.type === "text" ? block.text : null;
+  } catch {
+    return null;
+  }
+}
+```
+Guards: `max_tokens: 100` hard ceiling (output should always be 1-2 sentences); a 15s client
+timeout, not the SDK's 10-minute default, so a slow call can't hang the event page's render;
+wrapped in try/catch, fails silently to no-recap rather than a broken page - same fire-and-forget
+discipline as `logPageView()`. `ANTHROPIC_API_KEY` unset makes the feature fully inert, same
+founder-owned-credential convention as `RESEND_API_KEY`/`TWILIO_*`/`GOOGLE_CLIENT_ID`.
+
+**Not yet done, next session should start here**: nothing built - schema column, `src/lib/recap.ts`,
+and the event-page wiring are all still to write. Founder still needs an `ANTHROPIC_API_KEY` from
+the Anthropic Console, set in Vercel - same bucket as every other still-open founder credential
+(`ADMIN_EMAIL`, Resend domain, Twilio 10DLC).
