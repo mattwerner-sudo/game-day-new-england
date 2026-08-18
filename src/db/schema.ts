@@ -115,6 +115,11 @@ export const events = pgTable(
     homeScore: integer("home_score"),
     awayScore: integer("away_score"),
     boxscoreUrl: text("boxscore_url"),
+    // Generated once, lazily, on first real page view of a final game (Section 63) - never
+    // regenerated once set, so this is a cache, not a live field. Null means "not yet
+    // generated" (or ANTHROPIC_API_KEY isn't configured), not "no recap available" - the event
+    // page's own status check decides whether it's worth trying.
+    recapText: text("recap_text"),
     ticketUrl: text("ticket_url"),
     isFree: boolean("is_free"),
     sourceUrl: text("source_url"), // home school's own game-detail page - always-available

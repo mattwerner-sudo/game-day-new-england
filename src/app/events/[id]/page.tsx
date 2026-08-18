@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { getEventById, EventDetail, WeekendEvent } from "@/db/queries";
+import { getEventById, saveRecap, EventDetail, WeekendEvent } from "@/db/queries";
 import { formatGender, formatSport, formatLocation, formatParticipants, eventTitle } from "@/lib/format";
 import { resolveEmbed, resolveTicketEmbed, resolveNecFrontRowEmbed } from "@/lib/embed";
 import { withTicketAffiliateTag } from "@/lib/affiliate";
+import { generateRecap } from "@/lib/recap";
 import { SchoolLogo } from "@/components/SchoolLogo";
 import { logPageView } from "@/lib/analytics";
 import { auth } from "@/auth/auth";
@@ -153,6 +154,33 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
   const embed = resolveEmbed(event.streamingVideoUrl) ?? (await resolveNecFrontRowEmbed(event.streamingVideoUrl));
   const ticketEmbed = resolveTicketEmbed(event.ticketUrl);
 
+  // Generate once, lazily, on first real view of a final game with no recap yet - Section 63.
+  // Only two-team "game" rows carry home/away scores at all (special_event/meet rows never
+  // do, per Section 61's ingestion scope); status==='final' plus non-null scores/names is the
+  // real signal a genuine result exists, not just that the game type happens to be "game".
+  let recapText = event.recapText;
+  if (
+    event.type === "game" &&
+    event.status === "final" &&
+    !recapText &&
+    event.homeScore != null &&
+    event.awayScore != null &&
+    event.homeSchoolName &&
+    event.awaySchoolName
+  ) {
+    recapText = await generateRecap({
+      sport: event.sport,
+      gender: event.gender,
+      homeSchoolName: event.homeSchoolName,
+      awaySchoolName: event.awaySchoolName,
+      homeScore: event.homeScore,
+      awayScore: event.awayScore,
+      venueName: event.venueName,
+      startDatetime: event.startDatetime,
+    });
+    if (recapText) await saveRecap(event.id, recapText);
+  }
+
   // Session check - deliberately NOT redirecting when absent, this page must stay
   // public/crawlable for SEO (Section 6/39). Only the follow buttons below are gated.
   const session = await auth.api.getSession({ headers: await headers() });
@@ -256,6 +284,25 @@ export default async function EventPage({ params }: { params: Promise<{ id: stri
             />
             {event.homeSchoolName ?? "TBD"}
           </h1>
+        )}
+
+        {event.type === "game" && event.homeScore != null && event.awayScore != null && (
+          <p className="mt-2 text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+            {event.awayScore} - {event.homeScore}
+            {event.boxscoreUrl && (
+              <a
+                href={event.boxscoreUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 text-xs font-medium text-orange-600 hover:underline dark:text-orange-400"
+              >
+                Box score →
+              </a>
+            )}
+          </p>
+        )}
+        {recapText && (
+          <p className="mt-2 text-sm text-zinc-700 dark:text-zinc-300">{recapText}</p>
         )}
 
         <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">

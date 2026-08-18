@@ -182,6 +182,12 @@ export interface EventDetail extends WeekendEvent {
   homeLeague: string | null;
   awayLeague: string | null;
   specialVenueName: string | null;
+  // Detail-page-only, same reasoning as the rest of this interface (Section 42's caching-bug
+  // lesson - don't grow the shared list-page payload with fields only one page uses).
+  homeScore: number | null;
+  awayScore: number | null;
+  boxscoreUrl: string | null;
+  recapText: string | null;
 }
 
 /** Single event for its detail page (src/app/events/[id]/page.tsx) - not date-range scoped. */
@@ -218,6 +224,10 @@ export async function getEventById(id: string): Promise<EventDetail | null> {
       awayTeamId: events.awayTeamId,
       homeLeague: sql<string | null>`coalesce(${homeTeams.conference}, ${homeSchools.conference})`,
       awayLeague: sql<string | null>`coalesce(${awayTeams.conference}, ${awaySchools.conference})`,
+      homeScore: events.homeScore,
+      awayScore: events.awayScore,
+      boxscoreUrl: events.boxscoreUrl,
+      recapText: events.recapText,
     })
     .from(events)
     .leftJoin(homeTeams, eq(events.homeTeamId, homeTeams.id))
@@ -236,6 +246,14 @@ export async function getEventById(id: string): Promise<EventDetail | null> {
     homeSchoolLogoUrl: resolveLogo(rows[0].homeSchoolName, rows[0].homeSchoolWebsiteUrl, rows[0].homeSchoolCmsPlatform),
     awaySchoolLogoUrl: resolveLogo(rows[0].awaySchoolName, rows[0].awaySchoolWebsiteUrl, rows[0].awaySchoolCmsPlatform),
   };
+}
+
+/**
+ * Persists a lazily-generated recap (Section 63) so it's never regenerated for the same game -
+ * called once, from the event page, the first time a final game with no recap yet is viewed.
+ */
+export async function saveRecap(eventId: string, recapText: string): Promise<void> {
+  await db.update(events).set({ recapText }).where(eq(events.id, eventId));
 }
 
 /**
