@@ -33,6 +33,13 @@ type SearchParams = {
   school?: string;
   sport?: string;
   league?: string;
+  gender?: string;
+};
+
+const GENDER_LABELS: Record<string, string> = {
+  mens: "Men's",
+  womens: "Women's",
+  coed: "Coed",
 };
 
 /** Carry the current filters/date forward as hidden inputs so switching one control doesn't reset the others. */
@@ -43,7 +50,7 @@ function HiddenFilterFields({
   params: SearchParams;
   except: (keyof SearchParams)[];
 }) {
-  const fields: (keyof SearchParams)[] = ["date", "division", "state", "school", "sport", "league"];
+  const fields: (keyof SearchParams)[] = ["date", "division", "state", "school", "sport", "league", "gender"];
   return (
     <>
       {fields
@@ -72,6 +79,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
     schoolId: params.school || undefined,
     sport: params.sport || undefined,
     league: params.league || undefined,
+    gender: params.gender || undefined,
   };
   const hasFilters = Object.values(filters).some(Boolean);
 
@@ -122,6 +130,9 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
             </Link>
             <Link href="/leagues" className="hover:text-orange-600 hover:underline dark:hover:text-orange-400">
               Browse all leagues
+            </Link>
+            <Link href="/womens-sports" className="hover:text-orange-600 hover:underline dark:hover:text-orange-400">
+              Women&apos;s sports
             </Link>
           </nav>
           <h1 className="mt-1 text-3xl font-bold tracking-tight text-zinc-950 dark:text-zinc-50">
@@ -205,7 +216,7 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
             <input type="hidden" name="range" value={range} />
             <HiddenFilterFields
               params={params}
-              except={["division", "state", "school", "sport", "league"]}
+              except={["division", "state", "school", "sport", "league", "gender"]}
             />
 
             <label className="flex flex-col gap-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
@@ -283,6 +294,22 @@ export default async function Home({ searchParams }: { searchParams: Promise<Sea
                 {filterOptions.leagues.map((l) => (
                   <option key={l} value={l}>
                     {l}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="flex flex-col gap-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">
+              Gender
+              <select
+                name="gender"
+                defaultValue={params.gender ?? ""}
+                className="rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100"
+              >
+                <option value="">All</option>
+                {Object.entries(GENDER_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
                   </option>
                 ))}
               </select>

@@ -71,6 +71,7 @@ export interface EventFilters {
   schoolId?: string;
   sport?: string;
   league?: string;
+  gender?: string;
 }
 
 async function getFilteredEventsUncached(
@@ -88,6 +89,9 @@ async function getFilteredEventsUncached(
   ];
 
   if (filters.sport) conditions.push(eq(events.sport, filters.sport));
+  // gender is NOT NULL on every event, games and special_events alike, so this needs no
+  // third arm the way schoolId's participatingSchoolIds check does.
+  if (filters.gender) conditions.push(eq(events.gender, filters.gender));
   // Division is stored on the event itself (the division of whichever seeded school's
   // feed it came from) rather than derived from home/away, per Section 5's schema.
   if (filters.division) conditions.push(eq(events.division, filters.division));

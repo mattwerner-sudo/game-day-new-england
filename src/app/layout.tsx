@@ -15,7 +15,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "Game Day New England - New England College Sports Schedule",
   description:
-    "Find college sports games and meets happening near you across New England - every varsity sport, every division, all six states.",
+    "Find college sports games and meets happening near you across New England - every varsity sport and every division, women's and non-revenue sports included, all six states.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
