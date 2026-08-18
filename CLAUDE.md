@@ -3890,3 +3890,78 @@ discipline as every other live-data test this session. `tsc --noEmit` clean, ful
 
 **Not yet done, needs the founder**: set `ADMIN_EMAIL` in Vercel to actually unlock `/admin` -
 same category as every other founder-owned env var in this file.
+
+## 61. Session log: 2026-08-17 (continued) — VC/market research memo (Section 0.13), then real
+final-score capture built from it
+
+Founder asked to cross-reference this file against real 2026 VC/sports-tech research ("where
+dollars are being spent, where they want to see development") - recorded as **Section 0.13**
+(fan-graph infrastructure is now a named VC category, not just this founder's private thesis;
+AI recap/highlight automation is the highest-confidence 2026 sports-tech bet; women's/non-revenue
+college sports are a real, currently-surging category that overlaps a differentiator this product
+already has; vertical AI's actual thesis is "small teams, one narrow thing done completely,"
+validating the plan's five-agent model; Sports Innovation Lab's acquisition by Genius Sports is a
+real M&A comp for the "own the fan graph" thesis, checked directly at the founder's request, not
+an investor). Full findings and citations live in Section 0.13 itself, not repeated here.
+
+**That research surfaced a real, previously-undiscovered gap, acted on the same session: this
+product has never captured final scores/results at all.** `events.status` could be `"final"`
+per Section 5's original schema design, but nothing anywhere in the ingestion pipeline ever set
+it - every event was hardcoded to `status: "scheduled"` on every ingest, forever, confirmed via
+`grep` finding zero call sites setting any other status value. This is the "Results" half of the
+business plan's own "Schedule & Results Agent" (Section 0.3) that was never addressed, and the
+direct prerequisite for any future AI-recap feature (Section 0.13's Recommendation 1).
+
+**Feasibility, checked live against real data before writing any code:** SIDEARM's ICS feed
+(`DESCRIPTION` field, already parsed for TV/streaming/ticket lines) carries no score data at all
+- confirmed via Amherst's real feed. But SIDEARM's own schedule *page* (already fetched by
+`fetchSportMeta()` for ticket-link/sport-discovery, Section 16) embeds a real, consistently-
+shaped `result` JSON block per game - confirmed by fetching a genuinely-completed spring sport
+(Amherst baseball, season ended ~May 2026; football/hockey were still preseason/off-season as of
+this session, which is why the first two checks came back all-null and had to be treated as
+inconclusive rather than a negative result). Real example: `"result":{"game_id":14757,
+"status":"W","team_score":"24","opponent_score":"7",...,"boxscore":"/boxscore.aspx?id=14757",
+"line_scores":null}`, keyed by the same `game_id` already extracted from `sourceUrl` (the same
+join key already proven for the Paciolan ticket-widget work, Section 16). **Presto checked
+separately, not assumed symmetric**: its schedule page (Central Connecticut State, a school
+already confirmed not WAF-blocked) has zero score-related fields of any kind - consistent with
+Section 29's already-known finding that Presto's ICS `DESCRIPTION` carries no structured data
+either. A real, accepted coverage asymmetry - same shape as tickets/streaming's existing
+SIDEARM-only coverage.
+
+**Built**: `GameResult`/`extractGameResults()` in `discover.ts` - a field-anchored regex (not a
+full balanced-brace JSON parse, since the unused `line_scores` field can itself be a large
+nested object) pulling `status`/`team_score`/`opponent_score`/`boxscore` per game, only trusting
+entries with a real non-null status and two parseable scores. Wired into `fetchSportMeta()`
+alongside the existing Paciolan-ticket extraction (same HTML fetch, no new network call). New
+nullable `events.homeScore`/`awayScore`/`boxscoreUrl` columns (migration `0017_plain_katie_power.sql`,
+purely additive). In `ingestSchool.ts`: `team_score`/`opponent_score` in the source data are
+relative to whichever school's own page was fetched, not home/away - mapped using the same
+`matchup.isHome` signal already used for ticket/streaming fields, **but trusted on both the home
+and away pass** (unlike ticketUrl/streaming), since this is the ingesting school's own result for
+its own game regardless of which side it played on. `status` is set to `"final"` only when a real
+result was found; otherwise stays `"scheduled"` as before - no other status transitions
+(postponed/cancelled) were in scope here and still aren't set anywhere.
+
+**Verified three ways**: 5 new unit tests in `discover.test.ts` using real fragments captured
+from Amherst's live page (a real win with a boxscore link, a real loss with a nested
+`line_scores` object to confirm the field-anchored regex doesn't get confused by it, an all-null
+not-yet-played game correctly producing zero entries, multiple games on one page, an empty page).
+A targeted single-school local ingest (`ingest.ts "Amherst College" baseball`) followed by a
+direct DB query confirmed real rows: `status: 'final'`, correct home/away score mapping spot-
+checked against the raw source (game 14757: Amherst was the away team and scored 24, the query
+correctly shows `awayScore: 24`), real absolute boxscore URLs. Then a full production backfill:
+migration applied to Neon (schema-only, purely additive), and - since a full `--all` production
+ingest write was correctly blocked by the auto-mode safety classifier from the agent's own Bash
+tool, same pattern as Sections 44/46/53 - the founder ran `ingest.ts --all` directly. Confirmed
+after: **1,254 events now `status: 'final'` on Neon, 1,444 with real scores** (basketball/
+baseball/softball examples spot-checked, e.g. a real 61-45 final). `tsc --noEmit` clean, full
+suite 130/130 (125 + 5 new). Committed and pushed (`da2a59d`).
+
+**Not yet done, deliberately out of scope this pass**: the Content Agent itself (LLM-generated
+recap text from this new score data) - Section 0.13 always scoped that as separate, dependent
+follow-on work, not bundled into the feasibility-check-plus-capture pass done here. Also not
+done: postponed/cancelled status detection (a separate, real gap - this pass only ever writes
+`"scheduled"` or `"final"`), Presto score capture (no viable data source found), and Section
+0.13's Recommendation 2 (women's/non-revenue sports positioning pass) - still queued, untouched
+this session.
