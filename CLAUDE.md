@@ -4191,3 +4191,49 @@ click needs a real architectural fork (a same-origin redirect-through-our-server
 this app's plain `<a>` tags never hit our own server on click) that wasn't asked for and would
 add a hop to every ticket link - flagged as a real option for a future session, not built
 silently.
+
+## 66. Session log: 2026-08-20 (continued) — ticket-click tracking built (the fork flagged in
+Section 65)
+
+Founder confirmed: build it. New `GET /api/events/[id]/ticket-click` - both real "Buy Tickets"
+call sites (`EventList.tsx`'s shared list rendering used by the homepage/school/league pages,
+and the event detail page) now point here instead of a plain external `<a href>`, since that's
+the only way to observe a click server-side at all - an outbound link never touches this app's
+own server.
+
+**Deliberately takes an event id, not a destination URL** - the route looks up the real
+`ticketUrl` itself via `getEventById()` and redirects to that, never to anything the request
+supplies. Accepting an arbitrary `?url=` param and redirecting to it blind would have been a
+real open-redirect vulnerability (a link that *looks* like it points at this trusted domain but
+actually lands anywhere) - avoided by construction, not by validation. Falls back to the game's
+own `/events/[id]` page (not a 404, not a dead end) when the id doesn't resolve or the ticket
+URL went stale between page render and click. Fires `TicketClicked` via `src/lib/vemetric.ts`
+(Section 65) with `userIdentifier` set to the signed-in user's id when a session exists, else
+the literal string `"anonymous"` - deliberately not a cookie-based or fingerprinted identifier,
+consistent with this app's actual "cookieless" claim (inventing a persistent anonymous id here
+would have quietly undercut the privacy-policy language written earlier this same session).
+Then 302s to `withTicketAffiliateTag(event.ticketUrl)` - the affiliate-tagging call itself moved
+from the two page components into this route, so `withTicketAffiliateTag`'s import was removed
+from both `EventList.tsx` and `events/[id]/page.tsx` as now-unused. Embeddable-checkout games
+(Vivenu, Section 47/56) are unaffected - those already render a plain internal `<Link>` to the
+in-app iframe, never touching this new route at all.
+
+**Privacy policy updated again, same day** - the "Cookies and analytics" section written for
+Section 65's Vemetric disclosure named signing up/following as example tracked actions; added
+ticket-click tracking explicitly and clarified the anonymous-vs-signed-in split plainly ("if
+you're not signed in, it isn't tied to you at all") now that anonymous visitors are a real,
+common case for this specific event, not just an edge case.
+
+**Verified live against real Neon data, not just typechecked**: `curl -sI` against the real
+route for an actual ticketed game (a Hometown Ticketing link) confirmed a genuine 302 with the
+correct affiliate-tagged destination in the `Location` header; a deliberately-invalid event id
+confirmed the fallback-to-event-page path instead of an error; Saint Anselm's school page
+(already known from Section 56 to have both embeddable and non-embeddable ticket games in the
+same list) rendered both link types correctly side by side - internal `/events/[id]` links for
+the embeddable ones, the new `/api/events/[id]/ticket-click` for everything else. `tsc --noEmit`
+clean, full suite 134/134 unaffected (a redirect handler, no new pure-logic function - matches
+this project's existing testing-boundary convention). Committed and pushed (`c40f937`).
+
+**Both events flagged in Section 65 as worth adding are now live** (`TicketClicked` alongside
+`UserSignedUp`/`Followed`/`Unfollowed`) - real usage data starts accumulating the moment the
+founder sets `NEXT_PUBLIC_VEMETRIC_TOKEN`, same as the rest of Vemetric.
