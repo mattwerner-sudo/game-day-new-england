@@ -15,6 +15,7 @@ import {
   logFollowConsentEvent,
   FollowSubjectType,
 } from "@/fans/queries";
+import { trackEvent } from "@/lib/vemetric";
 
 /**
  * One route, a `type` discriminator field - matches the existing precedent
@@ -53,6 +54,7 @@ export async function POST(request: Request): Promise<Response> {
     type,
     [id]
   );
+  trackEvent(action === "unfollow" ? "Unfollowed" : "Followed", session.user.id, { type, id });
 
   return NextResponse.redirect(new URL(redirectTo, request.url), 303);
 }

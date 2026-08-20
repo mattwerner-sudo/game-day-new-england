@@ -9,6 +9,7 @@ import { sendSms } from "@/sms/send";
 import { otpEmail } from "@/email/templates";
 import { otpSms } from "@/sms/templates";
 import { generateToken } from "@/fans/tokens";
+import { trackEvent } from "@/lib/vemetric";
 
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL ?? process.env.NEXT_PUBLIC_BASE_URL,
@@ -103,6 +104,9 @@ export const auth = betterAuth({
         // reuses the same token primitive the old fans.manageToken used (src/fans/tokens.ts) -
         // every user gets one on creation regardless of which of the 3 signup methods they used.
         before: async (user) => ({ data: { ...user, manageToken: generateToken() } }),
+        // `after` runs once the row is actually inserted, so `user.id` is the real, final id -
+        // fires for all 3 signup methods (password/email OTP/phone OTP) from this one hook.
+        after: async (user) => trackEvent("UserSignedUp", user.id),
       },
     },
   },

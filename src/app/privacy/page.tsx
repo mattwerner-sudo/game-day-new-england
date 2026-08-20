@@ -5,7 +5,7 @@ const MAILING_ADDRESS = process.env.MAILING_ADDRESS ?? "[mailing address not yet
 // ("Game Day New England") isn't necessarily the same as the registered business entity that
 // legally operates it, and a privacy policy should name who "we" actually is.
 const LEGAL_ENTITY_NAME = process.env.LEGAL_ENTITY_NAME ?? "[legal entity name not yet configured]";
-const LAST_UPDATED = "August 17, 2026";
+const LAST_UPDATED = "August 20, 2026";
 
 export const metadata = { title: "Privacy Policy | Game Day New England" };
 
@@ -82,8 +82,9 @@ export default function PrivacyPage() {
               Your account data is stored in a managed Postgres database. Passwords are never
               stored in plain text - they&apos;re hashed before being saved, and we can&apos;t
               recover your original password even if we wanted to. We use established providers
-              to send email (Resend) and text messages (Twilio); they process message content
-              only to deliver it, not for their own purposes.
+              to send email (Resend), send text messages (Twilio), and analyze site usage
+              (Vemetric); they process this data only to provide their service to us, not for
+              their own purposes.
             </p>
           </section>
 
@@ -103,12 +104,20 @@ export default function PrivacyPage() {
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">Cookies</h2>
+            <h2 className="text-base font-semibold text-zinc-950 dark:text-zinc-50">
+              Cookies and analytics
+            </h2>
             <p className="mt-2">
               We use one cookie: a session cookie that keeps you signed in. We don&apos;t use
-              analytics, advertising, or tracking cookies, and we don&apos;t share cookie data with
-              any third party. We do record which pages are viewed - a page path and a timestamp,
-              nothing else - to understand what&apos;s popular. That record isn&apos;t tied to a
+              advertising or ad-tracking cookies.
+            </p>
+            <p className="mt-2">
+              We use Vemetric, a cookieless analytics service, to understand how the site is
+              used - which pages get visited, and for signed-in users, product actions like
+              signing up or following a school, team, league, venue, or game. Events tied to your
+              account use your account&apos;s internal id, never your name, email, or phone
+              number. We separately keep our own anonymous page-view count (a page path and a
+              timestamp, nothing else) for our own reporting - that record isn&apos;t tied to a
               cookie, account, IP address, or any other identifier, and can&apos;t be traced back
               to you.
             </p>
