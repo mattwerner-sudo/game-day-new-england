@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { WeekendEvent } from "@/db/queries";
 import { formatGender, formatSport, formatDay, formatTime, formatLocation, formatParticipants } from "@/lib/format";
-import { withTicketAffiliateTag } from "@/lib/affiliate";
 import { resolveTicketEmbed } from "@/lib/embed";
 import { SchoolLogo } from "@/components/SchoolLogo";
 
@@ -115,7 +114,7 @@ export function EventList({
                         </Link>
                       ) : (
                         <a
-                          href={withTicketAffiliateTag(event.ticketUrl)}
+                          href={`/api/events/${event.id}/ticket-click`}
                           target="_blank"
                           rel="noopener noreferrer"
                           className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-orange-700"

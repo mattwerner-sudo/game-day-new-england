@@ -113,10 +113,11 @@ export default function PrivacyPage() {
             </p>
             <p className="mt-2">
               We use Vemetric, a cookieless analytics service, to understand how the site is
-              used - which pages get visited, and for signed-in users, product actions like
-              signing up or following a school, team, league, venue, or game. Events tied to your
-              account use your account&apos;s internal id, never your name, email, or phone
-              number. We separately keep our own anonymous page-view count (a page path and a
+              used - which pages get visited, and actions like signing up, following a school,
+              team, league, venue, or game, or clicking through to buy tickets. If you&apos;re
+              signed in, that&apos;s tied to your account&apos;s internal id - never your name,
+              email, or phone number. If you&apos;re not signed in, it isn&apos;t tied to you at
+              all. We separately keep our own anonymous page-view count (a page path and a
               timestamp, nothing else) for our own reporting - that record isn&apos;t tied to a
               cookie, account, IP address, or any other identifier, and can&apos;t be traced back
               to you.
