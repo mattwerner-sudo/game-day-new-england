@@ -4102,3 +4102,92 @@ with a plain `function MockAnthropic() { return {...}; }`. `tsc --noEmit` clean,
 `ANTHROPIC_API_KEY` - the founder's own credential to add, same bucket as every other pending
 founder-owned setup item in this file. Once set, the very next view of any final game will
 generate and permanently cache its first real recap with no further code changes needed.
+
+## 65. Session log: 2026-08-20 — production-tampering scare (real, thorough audit, nothing
+found) + Vemetric web/product analytics added
+
+**A different AI coding tool ("Grok Bot") was reported to have made changes to this app.**
+Treated as a real incident, not a formality - checked every surface this app actually runs on:
+`git fetch` + diff against `origin/main` (identical, no new commits, no other branches, clean
+reflog), a direct Neon query (19 tables, all expected; 19 applied migrations, all matching files
+already in `drizzle/`; `events`' 32 columns exactly matched this session's own prior work; the
+most recent writes lined up precisely with the existing daily ingestion cron, not a rogue write),
+and the live production site itself (`game-day-new-england.vercel.app`'s served scripts,
+meta tags, and rendered behavior all matched this repo's actual code exactly - no injected
+script, no unexpected origin). Founder then confirmed Grok's changes were reportedly made
+**directly in Vercel**, not through git - explaining why the above came back clean. Got the
+`vercel` CLI working via `npx` (founder ran `vercel login` + `vercel link` themselves, the
+interactive parts I can't do), then checked what git can't see: deployment history (current
+production deployment's alias includes `-git-main-`, confirming it's genuinely git-triggered,
+not a stray CLI upload), environment variables (exactly the 5 already known - `DATABASE_URL`,
+`RESEND_API_KEY`, `CRON_SECRET`, `BETTER_AUTH_SECRET`, `NEXT_PUBLIC_BASE_URL` - all created
+7-14 days before this session, nothing new or recently touched), and domains (zero attached).
+**Conclusion: no evidence the reported change actually landed anywhere in this app's real
+infrastructure.** Recorded plainly rather than either fabricating a "here's what changed"
+summary or quietly dropping the question - this is exactly the kind of unverified claim this
+project's own discipline says to run to ground before building on top of it, not wave through.
+
+**Vemetric added** (founder's own request, real product need - see the Vercel CLI link above,
+now genuinely useful going forward for the founder to check deployments/env vars directly
+without going through this file's audit trail every time). Cloud-hosted only right now (no
+self-host option exists yet, checked directly against their docs before assuming otherwise) -
+cookieless by design, GDPR-compliant per their own claim, free tier is 2,500+ events/month
+which comfortably covers this app's real traffic. `npm install @vemetric/web @vemetric/node`.
+
+**Client-side**: new `instrumentation-client.ts` (project root - Next.js 16.3 is well past the
+15.3+ threshold this convention needs) calls `vemetric.init({token})` only when
+`NEXT_PUBLIC_VEMETRIC_TOKEN` is set - same "unset env var = inert" convention as every other
+vendor integration in this app. Confirmed directly against Vemetric's own docs before assuming
+it: automatic page-view tracking, including client-side SPA route changes via the History API,
+is on by default with `init()` alone - no extra per-route wiring needed, unlike a naive
+assumption that Next.js App Router navigations would need manual `trackPageView()` calls.
+
+**Server-side**: new `src/lib/vemetric.ts` wraps `@vemetric/node` behind the identical
+lazy-client pattern `src/lib/recap.ts` already established (Section 64) - construct once, gated
+on the token being present, every call wrapped so a Vemetric outage or bad token can never break
+the real user action it's attached to. One real fix mid-build: the installed SDK's own type
+definitions (checked directly, not assumed from docs) show `userIdentifier` is **required** on
+every `trackEvent` call, not optional as first drafted - `trackEvent()`'s signature takes it as
+a required second argument, always the account's own internal id, never an email or phone
+number.
+
+**Two real product events wired, both at their single existing integration point rather than
+scattered across call sites**: `UserSignedUp` via Better Auth's `databaseHooks.user.create.after`
+(fires post-insert with the real final `user.id`, covers all 3 signup methods - password/email
+OTP/phone OTP - from this one hook, no per-method duplication) and `Followed`/`Unfollowed` via
+the single shared `/api/follow` route that already handles all 5 follow types (school/team/
+league/venue/game) in one handler.
+
+**Real privacy-policy update, not an afterthought** - the previous "Cookies" section explicitly
+said "We don't use analytics... tracking cookies... and we don't share [data] with any third
+party," which was accurate before this and would have been false the moment Vemetric shipped.
+Renamed to "Cookies and analytics," rewrote to disclose Vemetric plainly (cookieless, what ties
+to an account - internal id only, never name/email/phone - vs. what stays fully anonymous, the
+existing bespoke page-view counter from Section 60 unchanged and still separately disclosed),
+added Vemetric alongside Resend/Twilio in the "Where your data is stored" processors list, and
+bumped `LAST_UPDATED` - same discipline this policy has followed for every prior new
+data-touching surface (COPPA, cookies, the Chrome extension, the page-view counter itself).
+
+**Verified live, not just typechecked**: app boots clean with no token set (console clean, no
+server errors - confirming the inert path actually works, not just that the code compiles); the
+privacy page renders the new copy correctly; and a full real sign-up was completed end-to-end
+via direct DOM interaction (the browser tool's `read_page` hit its already-documented flakiness
+- Sections 50/54 - fell back to `javascript_tool`, the established workaround) confirming the
+new `databaseHooks.user.create.after` hook doesn't interfere with account creation. That test
+sign-up landed in **production Neon**, not local PGlite - re-confirmed Section 33's standing
+finding that the dev server's `.env.local` always points at Neon - so the test account was
+found and deleted from Neon directly afterward, not left behind. `tsc --noEmit` clean, full
+suite 134/134 unaffected (thin SDK wrappers, no new pure-logic function - matches this project's
+existing testing-boundary convention for `src/lib/analytics.ts`). Committed and pushed
+(`359af7b`).
+
+**Not yet done, needs the founder**: sign up at `app.vemetric.com` (an account-creation step
+this session deliberately does not do), create a project, and set `NEXT_PUBLIC_VEMETRIC_TOKEN`
+in Vercel - same founder-owned-credential bucket as `ANTHROPIC_API_KEY`/`ADMIN_EMAIL`/etc.
+Everything else activates automatically the moment that token exists, no further code changes
+needed. Also flagged, not built: a genuinely valuable third event - ticket-link click-through,
+directly relevant to Section 0.11's affiliate-revenue thesis - but tracking an external-link
+click needs a real architectural fork (a same-origin redirect-through-our-server route, since
+this app's plain `<a>` tags never hit our own server on click) that wasn't asked for and would
+add a hop to every ticket link - flagged as a real option for a future session, not built
+silently.
