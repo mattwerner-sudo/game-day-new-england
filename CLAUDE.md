@@ -4360,3 +4360,38 @@ project. This is a credential-mismatch problem, not a settings-propagation-delay
 so redeploying again won't help until the token itself is corrected. Once fixed, no code changes
 or further deploys should be needed - Sections 65/66's `UserSignedUp`/`Followed`/`Unfollowed`/
 `TicketClicked` events are already wired and waiting.
+
+**Update, same night: founder supplied the real token (`0qnsbChQib4m5nwW`) directly - it's now
+confirmed NOT a credential-mismatch problem, the issue is on Vemetric's own account/server
+side.** Verified `vercel env pull` shows Vercel marks this var **`Sensitive`** - write-only, the
+value can never be read back via CLI or dashboard once set, which is exactly why the prior
+"compare it character-for-character" plan couldn't be carried out - there was nothing on the
+Vercel side to compare against. Given that, replaced the value outright rather than trying to
+diff it: `vercel env rm NEXT_PUBLIC_VEMETRIC_TOKEN production` then `vercel env add` with the
+founder-supplied value, followed by a fresh `vercel --prod` build (required since this is a
+`NEXT_PUBLIC_` var - it's baked into the client bundle at build time, so updating the env var
+alone without a rebuild would not have taken effect). Confirmed the new deployment aliased
+correctly to `game-day-new-england.vercel.app`.
+
+**Still 401 after all that - and this time proven, not just plausible, that it's not a token
+problem.** Fetched the live production JS bundle directly and grepped it for the literal token
+string: found `.init({token:"0qnsbChQib4m5nwW"})` baked into
+`chunks/1aa4ik-05i7id.js` on the fresh build - an exact, byte-for-byte match to what the founder
+pasted from Vemetric's own dashboard. So: the token in Vercel is now proven correct (not just
+assumed), the domain in Vemetric's settings was already confirmed correct via screenshot earlier
+this session, the request demonstrably reaches Vemetric's server (an earlier `no-cors` fetch
+test got a real `opaque` response, not a network failure), and it's a fresh, non-cached build.
+**Every variable on this app's side is now individually confirmed correct, and the 401 persists
+regardless.** This has to be something on Vemetric's own account/server side, not this codebase
+or its config - recorded here specifically so a future session doesn't waste time re-checking
+any of the above from scratch.
+
+**Not yet done, needs the founder, next session should start here if picked back up**: check
+Vemetric's own dashboard for (1) whether the token shown on the setup/install page is actually
+labeled as a public/client tracking token, as opposed to a separate private/server API key that
+looks similar but isn't meant for browser use, (2) any account-level hold - unverified email,
+free-tier limit reached, billing/payment issue, project paused, (3) failing those, contact
+Vemetric support directly with the concrete reproducible evidence now in hand: exact token, exact
+domain, and a live 401 on `hub.vemetric.com/e` - a much stronger support ticket than the original
+generic "CORS error" would have been, since it points directly at their own auth check rather
+than something fixable from this app's config.
