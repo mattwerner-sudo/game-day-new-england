@@ -8,7 +8,7 @@ Everything below is ready to copy-paste into the Chrome Web Store Developer Dash
 1. Go to https://chrome.google.com/webstore/devconsole
 2. Sign in with the Google account you want to publish under
 3. Pay the one-time $5 developer registration fee (first time only)
-4. Click "New Item" and upload `gdne-extension-v1.0.0.zip` (in this same folder)
+4. Click "New Item" and upload `gdne-extension-v1.1.0.zip` (in this same folder)
 
 ## 1. Store listing
 
@@ -29,8 +29,11 @@ filterable by school, right from your browser toolbar.
 • Today / This Weekend / Next 7 Days at a glance
 • Filter to your school — your pick is remembered next time you open it
 • Click any game for full details, tickets, and streaming links on the free full site
+• Lands on a supported school's own athletics website? The toolbar badge lights up if there are
+  upcoming ticketed games, with direct "Buy Tickets" links right in the popup
 
-No account required. No ads. No tracking beyond what's needed to show you the schedule.
+No account required. No ads. No tracking beyond what's needed to show you the schedule and
+surface ticket links on supported school sites.
 
 Free, from gamedaynewengland.com — built for New England college sports fans.
 
@@ -50,14 +53,16 @@ English (United States)
 
 **Single purpose description**
 Displays the New England college sports schedule from gamedaynewengland.com in a popup, with an
-optional school filter.
+optional school filter, and surfaces ticket links when the user visits a supported school's own
+athletics website.
 
 **Permission justifications**
 
 | Permission | Justification |
 |---|---|
 | `storage` | Used solely to remember the user's selected school filter locally on their device between popup opens. No data is transmitted anywhere except a school ID sent as a query parameter to gamedaynewengland.com's own public API, purely to filter which games are displayed. |
-| `host_permissions` (game-day-new-england.vercel.app) | Needed to fetch the public schedule API and to open a game's detail page when the user clicks a listed game. |
+| `tabs` | Used to check the current tab's URL against a local list of ~100 known New England college athletics website addresses, entirely on-device, so the extension can show a badge and surface ticket links when the user is on a supported school's own site. The URLs visited are never transmitted anywhere. Only on a match does the extension request that one school's own public upcoming-games data from gamedaynewengland.com's API - the same data already shown on the site. |
+| `host_permissions` (game-day-new-england.vercel.app) | Needed to fetch the public schedule/ticket API and to open a game's detail page when the user clicks a listed game or a ticket link. |
 
 **Data usage disclosure** (the CWS form will ask you to check boxes — answers below)
 - Does not collect personally identifiable information
@@ -66,7 +71,10 @@ optional school filter.
 - Does not collect authentication information
 - Does not collect personal communications
 - Does not collect location
-- Does not collect web browsing history
+- **Does collect web browsing history** - specifically, the URLs of visited tabs are checked
+  on-device against a local list of ~100 known school athletics domains, to power the
+  ticket-surfacing feature. No URL is ever transmitted off the device; only a school id is sent
+  to our own API, and only after a real match.
 - Does not collect user activity
 - Does not sell or transfer data to third parties
 - Does not use data for purposes unrelated to the extension's single purpose

@@ -458,6 +458,21 @@ export const getFilterOptions = unstable_cache(
   { revalidate: 300 }
 );
 
+/**
+ * Every school's own official website URL, alongside id/name - `getFilterOptions().schools`
+ * deliberately doesn't carry this (it's a picker-option shape, no reason to grow it), but the
+ * Chrome extension's site-detection feature (Section 67) needs it to build a hostname-to-school
+ * lookup table. websiteUrl is already public information (every school's base athletics site,
+ * the same domain their own logo/ticket/streaming links resolve against) - no new exposure.
+ */
+export async function getPublicSchoolsUncached(): Promise<{ id: string; name: string; websiteUrl: string }[]> {
+  return db.select({ id: schools.id, name: schools.name, websiteUrl: schools.websiteUrl }).from(schools).orderBy(asc(schools.name));
+}
+
+export const getPublicSchools = unstable_cache(getPublicSchoolsUncached, ["getPublicSchools"], {
+  revalidate: 300,
+});
+
 export interface SchoolProfile {
   id: string;
   name: string;

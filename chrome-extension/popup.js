@@ -4,8 +4,18 @@ const SITE_BASE = "https://game-day-new-england.vercel.app";
 const contentEl = document.getElementById("content");
 const schoolSelect = document.getElementById("school-select");
 const rangeTabs = document.getElementById("range-tabs");
+const ticketsAlertEl = document.getElementById("tickets-alert");
 
 let state = { range: "weekend", school: "" };
+let allSchools = []; // populated by loadSchools(), reused by detectCurrentTabTickets()
+
+function hostnameOf(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return null;
+  }
+}
 
 function formatDay(iso) {
   const d = new Date(iso);
@@ -88,6 +98,7 @@ async function loadSchools() {
     const res = await fetch(`${API_BASE}/api/v1/schools`);
     if (!res.ok) throw new Error(`API returned ${res.status}`);
     const schools = await res.json();
+    allSchools = schools;
     for (const school of schools) {
       const option = document.createElement("option");
       option.value = school.id;
@@ -102,6 +113,58 @@ async function loadSchools() {
     }
   } catch (err) {
     console.error("Game Day New England popup: couldn't load schools", err);
+  }
+}
+
+/**
+ * Section 67: if the tab this popup was opened from is a supported school's own athletics
+ * site, show that school's real upcoming ticketed games at the top, above the normal
+ * weekend-schedule browsing UI below. Runs after allSchools is populated (loadSchools) so the
+ * hostname match has something to check against. A miss (no match, or not a school site) just
+ * leaves the section empty - the rest of the popup works exactly as before.
+ */
+async function detectCurrentTabTickets() {
+  if (!ticketsAlertEl || allSchools.length === 0) return;
+
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  const hostname = tab && hostnameOf(tab.url);
+  if (!hostname) return;
+
+  const school = allSchools.find((s) => s.websiteUrl && hostnameOf(s.websiteUrl) === hostname);
+  if (!school) return;
+
+  try {
+    const res = await fetch(`${API_BASE}/api/v1/events?school=${school.id}&range=season`);
+    if (!res.ok) return;
+    const events = (await res.json()).filter((e) => e.ticketUrl);
+    if (events.length === 0) return;
+
+    const listHtml = events
+      .slice(0, 3)
+      .map(
+        (event) => `
+          <a class="ticket-alert-link" data-event-id="${event.id}" href="#">
+            <span>${formatDay(event.startDatetime)} — ${eventTitle(event)}</span>
+            <span class="ticket-alert-buy">Buy Tickets →</span>
+          </a>
+        `
+      )
+      .join("");
+
+    ticketsAlertEl.innerHTML = `
+      <div class="ticket-alert-heading">🎟️ Tickets available for ${school.name}</div>
+      ${listHtml}
+    `;
+    ticketsAlertEl.hidden = false;
+
+    ticketsAlertEl.querySelectorAll(".ticket-alert-link").forEach((link) => {
+      link.addEventListener("click", (e) => {
+        e.preventDefault();
+        chrome.tabs.create({ url: `${API_BASE}/api/events/${link.dataset.eventId}/ticket-click` });
+      });
+    });
+  } catch (err) {
+    console.error("Game Day New England popup: ticket detection failed", err);
   }
 }
 
@@ -120,4 +183,7 @@ schoolSelect.addEventListener("change", () => {
   loadEvents();
 });
 
-loadSchools().then(loadEvents);
+loadSchools().then(() => {
+  loadEvents();
+  detectCurrentTabTickets();
+});

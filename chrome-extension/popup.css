@@ -41,6 +41,44 @@ header {
   background: #fff;
 }
 
+.tickets-alert {
+  padding: 10px 14px;
+  background: #fff7ed;
+  border-bottom: 1px solid #fdba74;
+}
+
+.ticket-alert-heading {
+  font-size: 12px;
+  font-weight: 600;
+  color: #9a3412;
+  margin-bottom: 6px;
+}
+
+.ticket-alert-link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 8px;
+  margin-bottom: 4px;
+  border-radius: 6px;
+  background: #fff;
+  border: 1px solid #fdba74;
+  text-decoration: none;
+  color: #18181b;
+  font-size: 11.5px;
+}
+
+.ticket-alert-link:hover {
+  border-color: #ea580c;
+}
+
+.ticket-alert-buy {
+  flex-shrink: 0;
+  font-weight: 600;
+  color: #ea580c;
+}
+
 .range-tabs {
   display: flex;
   gap: 4px;

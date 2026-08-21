@@ -101,6 +101,15 @@ export default function PrivacyPage() {
               used to filter what&apos;s shown. Uninstalling the extension removes that saved
               preference.
             </p>
+            <p className="mt-2">
+              To surface ticket links when you land on a supported school&apos;s own athletics
+              website, the extension checks each page you visit against a list of about 100
+              known school website addresses (Chrome&apos;s <code>tabs</code> permission) -
+              entirely on your device. The pages you visit are never sent anywhere. Only when a
+              page matches a known school does the extension request that school&apos;s own
+              upcoming ticketed games from our public API - the same data already shown on the
+              site.
+            </p>
           </section>
 
           <section>
