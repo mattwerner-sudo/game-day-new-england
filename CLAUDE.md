@@ -4334,3 +4334,29 @@ actual upload/review process all remain the founder's own account-and-payment ac
 every prior mention of this in Sections 58-59. Real secondary-market price comparison (the
 literal original ask) remains explicitly out of scope, not silently dropped - would need a new,
 separately-scoped, likely-paid vendor integration if the founder wants to revisit it later.
+
+**Vemetric CORS block, re-diagnosed - it's a bad token, not a domain-allowlist issue.** Section
+65 originally flagged live production CORS errors on `hub.vemetric.com/e` and guessed it was
+likely a domain-allowlist setting in Vemetric's dashboard. Checked directly this session, not
+re-guessed: the founder's Vemetric project settings already show `Domain:
+game-day-new-england.vercel.app` set correctly - confirmed via screenshot. Re-tested live
+against production anyway (not assumed fixed): still CORS-blocked. **Ruled out "request never
+reaching the server"** via a `no-cors` fetch from the live page's own console - got a real
+`opaque` response (`type: "opaque", status: 0`), which only happens when the server actually
+responds; a true network/DNS/firewall failure would throw instead. Founder then redeployed
+(hoping a fresh build would help) and it was re-checked again: same CORS error, but this time
+Chrome's console additionally leaked the real underlying status code before scrubbing it for
+JS - **`the server responded with a status of 401 ()`**. A 401 (not 403, not a plain missing-
+header case) means Vemetric's server is rejecting the *token itself* as invalid before it ever
+gets to a domain-allowlist check - many APIs skip CORS headers entirely on an auth failure,
+which is why this has always presented as a CORS error at the browser level even though the
+real fault is authentication, not origin policy.
+
+**Action needed from the founder, not yet done**: open the Vemetric project's setup/install page
+(the one showing the real JS snippet with the actual token embedded) and compare that token
+character-for-character against `NEXT_PUBLIC_VEMETRIC_TOKEN` in Vercel's environment variables -
+looking for a mistype, truncation, stray quote marks, or a token copied from a different/old
+project. This is a credential-mismatch problem, not a settings-propagation-delay or code problem,
+so redeploying again won't help until the token itself is corrected. Once fixed, no code changes
+or further deploys should be needed - Sections 65/66's `UserSignedUp`/`Followed`/`Unfollowed`/
+`TicketClicked` events are already wired and waiting.
