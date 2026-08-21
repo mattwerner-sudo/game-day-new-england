@@ -4237,3 +4237,100 @@ this project's existing testing-boundary convention). Committed and pushed (`c40
 **Both events flagged in Section 65 as worth adding are now live** (`TicketClicked` alongside
 `UserSignedUp`/`Followed`/`Unfollowed`) - real usage data starts accumulating the moment the
 founder sets `NEXT_PUBLIC_VEMETRIC_TOKEN`, same as the rest of Vemetric.
+
+## 67. Session log: 2026-08-20 (continued) — Chrome extension: surface a school's real ticket
+links when the user lands on that school's own athletics site
+
+Founder's original ask ("surface ticket linking, with the best price, to the customer when they
+land on a school's website") got scoped down live in chat before building anything: this app has
+never captured any real ticket *price* data anywhere (confirmed via a fresh grep - zero
+matches on "price"/"Price" across the schema/ingestion codebase), so true secondary-market price
+comparison would mean a new, uncosted vendor integration (StubHub/SeatGeek/Vivid Seats), not a
+few hours of wiring. Asked the founder directly which they actually wanted; they answered "YES"
+to the smaller, already-buildable half - detect the site, surface the one real official ticket
+link, if one exists. That's what got built. Price comparison itself is not started and would need
+a real vendor-integration scoping pass first, same as any other new paid API dependency in this
+project.
+
+**Chrome permission research, checked directly, not assumed**: confirmed via `WebFetch` against
+`developer.chrome.com/docs/extensions/reference/api/tabs` that the `"tabs"` permission ALONE
+(no per-domain `host_permissions`, no `<all_urls>`) is sufficient for `chrome.tabs.query()`/
+`onUpdated`/`onActivated` to expose the sensitive `url`/`pendingUrl`/`title`/`favIconUrl` Tab
+fields - the doc states this plainly ("This property is only present if the extension has the
+`tabs` permission or has host permissions for the page"). This is what let the feature avoid
+either a ~100-entry `host_permissions` list (one per school domain) or the much broader
+`<all_urls>` - both of which would have made the Chrome Web Store review's permission
+justification noticeably harder to defend than "one general permission, on-device matching only."
+
+**New `chrome-extension/background.js`** (manifest bumped to `1.1.0`, `permissions` gains
+`"tabs"` alongside the existing `"storage"`): registers `chrome.tabs.onUpdated`/`onActivated`
+listeners. On every tab navigation, extracts the hostname and checks it - entirely on-device,
+never transmitted anywhere - against the school list fetched from `/api/v1/schools` (cached 5
+minutes in memory, matching the existing pattern of not hammering the API on every tab switch).
+On a match, fetches that one school's upcoming ticketed games
+(`/api/v1/events?school=<id>&range=season`) and sets a tab-scoped toolbar badge (orange `#EA580C`,
+matching the site's brand color) with the ticketed-game count; clears the badge on no-match or
+non-http tabs (`chrome://`, etc.).
+
+**`src/db/queries.ts`/`src/app/api/v1/schools/route.ts`**: the public schools API only ever
+returned `id`/`name`, insufficient for hostname matching. Added `getPublicSchoolsUncached()` +
+a 5-minute `unstable_cache`-wrapped `getPublicSchools()` returning `websiteUrl` too, and switched
+the route to use it - the extension's hostname check (both `background.js` and the popup) reuses
+this same public endpoint rather than a new one.
+
+**`popup.js`/`popup.html`/`popup.css`**: `detectCurrentTabTickets()` runs after the existing
+`loadSchools()` populates the school list, checks the current tab's hostname the same way the
+background worker does, and - on a match with real ticketed games - renders a `#tickets-alert`
+section above the normal Today/Weekend/Next-7-Days browsing UI, listing up to 3 real games with
+"Buy Tickets →" links. Clicking one opens `/api/events/{id}/ticket-click` (the existing
+click-tracking/affiliate-tagging redirect route from Section 66) in a new tab, so extension-
+sourced ticket clicks get exactly the same `TicketClicked` Vemetric event and affiliate UTM
+tagging as every other ticket link in this product - no separate code path invented for the
+extension specifically.
+
+**A real Manifest V3 gotcha found while building the verification harness, not in the shipped
+extension itself**: classic (non-module) `<script>` tags loaded together into one page share a
+single global lexical scope. Both `background.js` and `popup.js` independently declare
+`const API_BASE` at module top-level - harmless in the real extension (the background service
+worker and the popup run in genuinely separate JS contexts, never sharing scope), but loading
+both into one throwaway test harness page threw `SyntaxError: Identifier 'API_BASE' has already
+been declared`, which in turn silently aborted `popup.js` before `ticketsAlertEl` was even
+assigned (confirmed via `read_console_messages` and a direct `javascript_tool` eval throwing
+`ReferenceError: ticketsAlertEl is not defined`). Fixed by renaming the identifier only in the
+throwaway background-worker test copy (`sed 's|API_BASE|BG_API_BASE|g'`), never touching the
+real `chrome-extension/background.js` - a harness bug, not an extension bug.
+
+**Verified end to end via a temporary local stub harness** (`public/_test_harness.html` +
+sed-derived copies of the real `background.js`/`popup.js`/`popup.css`, hardcoded production URL
+swapped to `http://localhost:3000`, all four files fully deleted after use - same throwaway-
+diagnostic-script discipline used throughout this project): confirmed a matching tab (Saint
+Anselm's real athletics domain) renders the badge text "7" in orange, a non-matching tab and a
+non-http tab both correctly clear the badge, and the popup's `#tickets-alert` section renders 3
+real Saint Anselm ticketed games with working "Buy Tickets →" links pointing at the real
+click-tracking route. `tsc --noEmit` clean, full suite 134/134 unaffected (extension JS has no
+automated test harness, same established testing-boundary convention as the rest of
+`chrome-extension/`, Section 58).
+
+**Privacy policy updated again, same day** (`/privacy`'s "Chrome extension" section): discloses
+the new `tabs` permission plainly - the pages visited are checked on-device against ~100 known
+school domains, never transmitted anywhere; only on a real match does the extension request that
+one school's own public upcoming-games data, the same data already shown on the site.
+
+**Chrome Web Store submission assets refreshed for v1.1.0**: `SUBMISSION_PACKET.md`'s permission-
+justification table gained a `tabs` row, the "Does not collect web browsing history" line was
+corrected to "**Does collect web browsing history**" with an accurate explanation (on-device only,
+never transmitted), and the description/zip-filename references were updated throughout. Rebuilt
+`gdne-extension-v1.1.0.zip` (verified via `unzip -l` - all 9 expected entries present) and deleted
+the now-superseded `gdne-extension-v1.0.0.zip` from the repo, since keeping both would leave
+ambiguity about which zip the founder should actually upload.
+
+Committed and pushed (`d0d9fd8`).
+
+**Not yet done, needs the founder**: the extension still needs to be re-loaded/re-tested via a
+real `chrome://extensions` install (this session's verification used the stub-harness technique,
+not a real installed-extension test - same limitation already on record from Section 58) and the
+Chrome Web Store submission itself hasn't been completed - developer account, $5 fee, and the
+actual upload/review process all remain the founder's own account-and-payment actions, same as
+every prior mention of this in Sections 58-59. Real secondary-market price comparison (the
+literal original ask) remains explicitly out of scope, not silently dropped - would need a new,
+separately-scoped, likely-paid vendor integration if the founder wants to revisit it later.
